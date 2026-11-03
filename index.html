@@ -1,0 +1,1038 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Factures – Patinage</title>
+<meta name="theme-color" content="#2f6fb3">
+<meta name="apple-mobile-web-app-title" content="Factures">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #f3f7fb;
+    --card: #ffffff;
+    --ink: #1d2a3a;
+    --muted: #6b7a8c;
+    --line: #dde5ee;
+    --accent: #2f6fb3;
+    --accent-soft: #e6f0fa;
+    --ok: #2e8b57;
+    --ok-soft: #e4f4ea;
+    --warn: #c0761a;
+    --warn-soft: #fbf0e1;
+    --danger: #c0392b;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    background: var(--card); border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 24px; padding: 0 24px; height: 60px;
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 18px; margin: 0; white-space: nowrap; }
+  header h1 span { color: var(--accent); }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  nav button {
+    border: 0; background: none; padding: 8px 14px; border-radius: 8px;
+    font: inherit; color: var(--muted); cursor: pointer;
+  }
+  nav button:hover { background: var(--bg); color: var(--ink); }
+  nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  .view { display: none; }
+  .view.active { display: block; }
+  h2 { font-size: 20px; margin: 0 0 16px; }
+  h3 { font-size: 15px; margin: 0 0 12px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px; margin-bottom: 20px; overflow-x: auto;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .row > label { flex: 1 1 200px; }
+  label { display: block; font-size: 13px; color: var(--muted); }
+  label > input, label > select, label > textarea { margin-top: 4px; }
+  input, select, textarea {
+    width: 100%; font: inherit; color: var(--ink); background: #fff;
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line);
+    background: #fff; color: var(--ink); padding: 8px 14px; border-radius: 8px;
+    font: inherit; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.danger { color: var(--danger); }
+  .btn.danger:hover { border-color: var(--danger); }
+  .btn.small { padding: 4px 10px; font-size: 13px; }
+  .btn.link { border: 0; background: none; color: var(--accent); padding: 4px 6px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { background: var(--bg); }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+  .badge.payee { background: var(--ok-soft); color: var(--ok); }
+  .badge.impayee { background: var(--warn-soft); color: var(--warn); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 20px; }
+  .stat .lbl { font-size: 13px; color: var(--muted); }
+  .stat .val { font-size: 24px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); text-align: center; padding: 32px; }
+  .toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .toolbar input, .toolbar select { width: auto; }
+  .toolbar .grow { flex: 1; min-width: 200px; }
+  #lignes td { padding: 4px; }
+  #lignes input { padding: 6px 8px; }
+  #lignes .c-date { width: 150px; }
+  #lignes .c-qte { width: 90px; }
+  #lignes .c-prix { width: 110px; }
+  #lignes .c-total { width: 110px; }
+  #lignes .c-del { width: 40px; }
+  .totaux { margin-left: auto; width: 300px; margin-top: 12px; }
+  .totaux div { display: flex; justify-content: space-between; padding: 4px 0; font-variant-numeric: tabular-nums; }
+  .totaux .grand { border-top: 2px solid var(--ink); margin-top: 6px; padding-top: 8px; font-weight: 700; font-size: 17px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .chip {
+    border: 1px dashed var(--accent); color: var(--accent); background: var(--accent-soft);
+    border-radius: 99px; padding: 4px 12px; font-size: 13px; cursor: pointer; font: inherit; font-size: 13px;
+  }
+  .hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; }
+  .check input { width: auto; margin: 0; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+    background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 8px;
+    transition: transform .25s; z-index: 50;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .banner {
+    background: var(--warn-soft); color: var(--warn); border-radius: var(--radius);
+    padding: 10px 16px; margin-bottom: 16px; display: none; align-items: center; gap: 12px;
+  }
+  .banner.show { display: flex; }
+  .banner span { flex: 1; }
+  dialog { border: 0; border-radius: var(--radius); padding: 24px; width: min(520px, 92vw); box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  dialog::backdrop { background: rgba(20,30,45,.4); }
+  .logo-preview { max-height: 60px; max-width: 200px; display: block; margin-top: 8px; }
+
+  /* ---------- Facture imprimable ---------- */
+  #impression { display: none; }
+  .facture { background: #fff; color: #111; font-size: 13px; line-height: 1.5; }
+  .facture .tete { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 32px; }
+  .facture .tete img { max-height: 80px; max-width: 220px; margin-bottom: 8px; }
+  .facture .emetteur strong { font-size: 16px; }
+  .facture .titre { text-align: right; }
+  .facture .titre h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: .08em; color: #2f6fb3; }
+  .facture .titre table td { border: 0; padding: 1px 0 1px 16px; text-align: right; white-space: nowrap; }
+  .facture .client { margin-bottom: 24px; }
+  .facture .client .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #777; }
+  .facture table.items th { border-bottom: 2px solid #111; color: #111; }
+  .facture table.items td { border-bottom: 1px solid #ddd; }
+  .facture .totaux .grand { border-color: #111; }
+  .facture .pied { margin-top: 36px; font-size: 12px; color: #444; white-space: pre-line; }
+  .facture .paye { display: inline-block; border: 2px solid #2e8b57; color: #2e8b57; padding: 4px 14px; font-weight: 700; letter-spacing: .1em; transform: rotate(-4deg); margin-top: 12px; }
+  .facture .taxnos { font-size: 11px; color: #666; margin-top: 4px; }
+
+  @media print {
+    @page { margin: 16mm; }
+    body { background: #fff; }
+    header, main, .toast, dialog { display: none !important; }
+    #impression { display: block; }
+  }
+  @media (max-width: 700px) {
+    header { height: auto; flex-direction: column; align-items: flex-start; padding: 12px 16px; gap: 8px; }
+    main { padding: 16px; }
+    .totaux { width: 100%; }
+    #lignes .c-date { width: 120px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⛸️ <span>Factures</span> patinage</h1>
+  <nav>
+    <button data-view="factures" class="active">Factures</button>
+    <button data-view="edition">Nouvelle facture</button>
+    <button data-view="eleves">Élèves</button>
+    <button data-view="parametres">Paramètres</button>
+  </nav>
+</header>
+
+<main>
+  <div class="banner" id="banner-sauvegarde">
+    <span>💾 Pense à faire une copie de sauvegarde de tes données (dernière : <b id="derniere-sauvegarde">jamais</b>).</span>
+    <button class="btn small" onclick="exporterSauvegarde()">Sauvegarder maintenant</button>
+  </div>
+
+  <!-- ===================== FACTURES ===================== -->
+  <section class="view active" id="view-factures">
+    <div class="stats">
+      <div class="stat"><div class="lbl">Facturé cette année</div><div class="val" id="st-annee">0 $</div></div>
+      <div class="stat"><div class="lbl">En attente de paiement</div><div class="val" id="st-attente">0 $</div></div>
+      <div class="stat"><div class="lbl">Factures impayées</div><div class="val" id="st-nb">0</div></div>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <input class="grow" id="f-recherche" placeholder="Rechercher (élève, numéro…)" oninput="afficherFactures()">
+        <select id="f-statut" onchange="afficherFactures()">
+          <option value="">Tous les statuts</option>
+          <option value="impayee">Impayées</option>
+          <option value="payee">Payées</option>
+        </select>
+        <button class="btn primary" onclick="nouvelleFacture()">+ Nouvelle facture</button>
+      </div>
+      <table>
+        <thead><tr><th>N°</th><th>Date</th><th>Élève</th><th class="num">Total</th><th>Statut</th><th></th></tr></thead>
+        <tbody id="liste-factures"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== ÉDITION ===================== -->
+  <section class="view" id="view-edition">
+    <h2 id="titre-edition">Nouvelle facture</h2>
+    <div class="card">
+      <div class="row">
+        <label>Élève
+          <select id="e-eleve" onchange="choisirEleve()"></select>
+        </label>
+        <label style="flex:0 1 180px">Numéro
+          <input id="e-no">
+        </label>
+        <label style="flex:0 1 180px">Date de la facture
+          <input type="date" id="e-date">
+        </label>
+        <label style="flex:0 1 180px">Payable avant le
+          <input type="date" id="e-echeance">
+        </label>
+      </div>
+      <p class="hint" id="e-eleve-hint"></p>
+    </div>
+
+    <div class="card">
+      <h3>Cours et frais</h3>
+      <table id="lignes">
+        <thead><tr>
+          <th class="c-date">Date</th><th>Description</th>
+          <th class="c-qte num">Qté / h</th><th class="c-prix num">Prix</th><th class="c-total num">Montant</th><th class="c-del"></th>
+        </tr></thead>
+        <tbody id="e-lignes"></tbody>
+      </table>
+      <div class="actions" style="margin-top:10px">
+        <button class="btn small" onclick="ajouterLigne()">+ Ajouter une ligne</button>
+        <button class="btn small" onclick="ouvrirSerie()">+ Plusieurs cours d'un coup</button>
+      </div>
+      <div class="chips" id="e-chips"></div>
+
+      <div class="totaux" id="e-totaux"></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <label>Note sur la facture (optionnel)
+          <textarea id="e-notes" placeholder="Ex. : Merci ! Session d'automne."></textarea>
+        </label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <label class="check"><input type="checkbox" id="e-taxes" onchange="majTotaux()"> Appliquer les taxes (TPS/TVQ)</label>
+        <label class="check"><input type="checkbox" id="e-payee"> Déjà payée</label>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" onclick="enregistrerFacture(true)">💾 Enregistrer et imprimer / PDF</button>
+      <button class="btn" onclick="enregistrerFacture(false)">Enregistrer</button>
+      <button class="btn" onclick="apercu()">Aperçu</button>
+      <button class="btn" onclick="montrer('factures')">Annuler</button>
+    </div>
+  </section>
+
+  <!-- ===================== ÉLÈVES ===================== -->
+  <section class="view" id="view-eleves">
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0" class="grow">Élèves</h2>
+        <button class="btn primary" onclick="editerEleve()">+ Ajouter un élève</button>
+      </div>
+      <table>
+        <thead><tr><th>Élève</th><th>Parent / à facturer à</th><th>Courriel</th><th class="num">Tarif</th><th class="num">Solde dû</th><th></th></tr></thead>
+        <tbody id="liste-eleves"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== PARAMÈTRES ===================== -->
+  <section class="view" id="view-parametres">
+    <h2>Paramètres</h2>
+    <div class="card">
+      <h3>Tes informations (en haut de la facture)</h3>
+      <div class="row">
+        <label>Ton nom<input id="p-nom" placeholder="Prénom Nom"></label>
+        <label>Nom d'entreprise / titre (optionnel)<input id="p-entreprise" placeholder="Entraîneuse de patinage artistique"></label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <label>Adresse<textarea id="p-adresse" placeholder="123 rue Exemple&#10;Ville (Québec) A1A 1A1"></textarea></label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <label>Téléphone<input id="p-tel"></label>
+        <label>Courriel<input id="p-courriel"></label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <label>Logo (optionnel)<input type="file" id="p-logo" accept="image/*" onchange="chargerLogo(event)"></label>
+      </div>
+      <img id="p-logo-preview" class="logo-preview" alt="" hidden>
+      <button class="btn small link" id="p-logo-retirer" onclick="retirerLogo()" hidden>Retirer le logo</button>
+    </div>
+
+    <div class="card">
+      <h3>Facturation</h3>
+      <div class="row">
+        <label>Tarif horaire par défaut ($)<input type="number" step="0.01" id="p-tarif"></label>
+        <label>Préfixe des numéros<input id="p-prefixe" placeholder="2026-"></label>
+        <label>Prochain numéro<input type="number" id="p-prochain"></label>
+        <label>Délai de paiement (jours)<input type="number" id="p-delai"></label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <label>Instructions de paiement (bas de la facture)<textarea id="p-paiement" placeholder="Paiement par virement Interac à : courriel@exemple.com"></textarea></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Taxes</h3>
+      <p class="hint" style="margin:0 0 12px">Au Québec, si tes revenus sont sous 30 000 $ par année, tu es « petit fournisseur » et tu n'as pas à charger les taxes. Coche seulement si tu es inscrite.</p>
+      <label class="check"><input type="checkbox" id="p-taxes"> Charger les taxes par défaut</label>
+      <div class="row" style="margin-top:12px">
+        <label>Taux TPS (%)<input type="number" step="0.001" id="p-tps-taux"></label>
+        <label>N° TPS<input id="p-tps-no"></label>
+        <label>Taux TVQ (%)<input type="number" step="0.001" id="p-tvq-taux"></label>
+        <label>N° TVQ<input id="p-tvq-no"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Boutons rapides (types de cours et frais)</h3>
+      <p class="hint" style="margin:0 0 12px">Ils apparaissent sous la liste des lignes pour ajouter un cours en un clic. Laisse le prix vide pour utiliser le tarif de l'élève.</p>
+      <table>
+        <thead><tr><th>Description</th><th class="num" style="width:120px">Qté / h</th><th class="num" style="width:140px">Prix</th><th style="width:40px"></th></tr></thead>
+        <tbody id="p-prestations"></tbody>
+      </table>
+      <button class="btn small" style="margin-top:8px" onclick="ajouterPrestation()">+ Ajouter</button>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" onclick="enregistrerParametres()">Enregistrer les paramètres</button>
+    </div>
+
+    <div class="card" style="margin-top:28px">
+      <h3>Sauvegarde des données</h3>
+      <p class="hint" style="margin:0 0 12px">Les données sont gardées dans ce navigateur, sur cet ordinateur. Fais une sauvegarde de temps en temps (clé USB, Google Drive…) pour ne rien perdre, ou pour les transférer sur un autre ordinateur.</p>
+      <div class="actions">
+        <button class="btn" onclick="exporterSauvegarde()">💾 Télécharger une sauvegarde</button>
+        <button class="btn" onclick="document.getElementById('import-fichier').click()">📂 Restaurer une sauvegarde</button>
+        <button class="btn" onclick="exporterCSV()">📊 Exporter les factures (Excel / CSV)</button>
+        <input type="file" id="import-fichier" accept=".json,application/json" hidden onchange="importerSauvegarde(event)">
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Facture prête à imprimer -->
+<div id="impression"></div>
+
+<!-- Dialogue élève -->
+<dialog id="dlg-eleve">
+  <h2 id="dlg-eleve-titre">Élève</h2>
+  <div class="row"><label>Nom de l'élève *<input id="d-nom"></label></div>
+  <div class="row" style="margin-top:10px"><label>Parent / personne à facturer<input id="d-parent" placeholder="Si différent de l'élève"></label></div>
+  <div class="row" style="margin-top:10px">
+    <label>Courriel<input id="d-courriel"></label>
+    <label>Téléphone<input id="d-tel"></label>
+  </div>
+  <div class="row" style="margin-top:10px"><label>Adresse<textarea id="d-adresse"></textarea></label></div>
+  <div class="row" style="margin-top:10px"><label>Tarif horaire ($)<input type="number" step="0.01" id="d-tarif" placeholder="Tarif par défaut"></label></div>
+  <div class="actions">
+    <button class="btn primary" onclick="enregistrerEleve()">Enregistrer</button>
+    <button class="btn" onclick="document.getElementById('dlg-eleve').close()">Annuler</button>
+  </div>
+</dialog>
+
+<!-- Dialogue série de cours -->
+<dialog id="dlg-serie">
+  <h2>Ajouter plusieurs cours</h2>
+  <p class="hint" style="margin-top:-8px">Pratique pour facturer un mois complet : un cours par semaine, le même jour.</p>
+  <div class="row"><label>Description<input id="s-desc" value="Cours privé"></label></div>
+  <div class="row" style="margin-top:10px">
+    <label>Premier cours<input type="date" id="s-debut"></label>
+    <label>Nombre de semaines<input type="number" id="s-nb" value="4" min="1" max="52"></label>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <label>Durée (h)<input type="number" step="0.25" id="s-qte" value="1"></label>
+    <label>Prix ($)<input type="number" step="0.01" id="s-prix"></label>
+  </div>
+  <div class="actions">
+    <button class="btn primary" onclick="ajouterSerie()">Ajouter</button>
+    <button class="btn" onclick="document.getElementById('dlg-serie').close()">Annuler</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===================================================================
+// Données
+// ===================================================================
+const CLE = 'factures-patinage-v1';
+const annee = new Date().getFullYear();
+
+const DEFAUT = {
+  parametres: {
+    nom: '', entreprise: 'Entraîneuse de patinage artistique', adresse: '', tel: '', courriel: '', logo: '',
+    tarif: 60, prefixe: annee + '-', prochain: 1, delai: 14,
+    paiement: 'Paiement par virement Interac ou en argent comptant.\nMerci !',
+    taxes: false, tpsTaux: 5, tpsNo: '', tvqTaux: 9.975, tvqNo: '',
+    prestations: [
+      { desc: 'Cours privé', qte: 1, prix: '' },
+      { desc: 'Cours privé (30 min)', qte: 0.5, prix: '' },
+      { desc: 'Cours semi-privé', qte: 1, prix: '' },
+      { desc: 'Accompagnement en compétition', qte: 1, prix: '' },
+      { desc: 'Chorégraphie', qte: 1, prix: '' },
+      { desc: 'Frais de glace', qte: 1, prix: '' },
+    ],
+  },
+  eleves: [],
+  factures: [],
+  derniereSauvegarde: null,
+};
+
+let db = charger();
+let factureEnCours = null; // id de la facture en édition (null = nouvelle)
+
+function charger() {
+  try {
+    const brut = localStorage.getItem(CLE);
+    if (brut) {
+      const d = JSON.parse(brut);
+      return { ...structuredClone(DEFAUT), ...d, parametres: { ...DEFAUT.parametres, ...d.parametres } };
+    }
+  } catch (e) { console.error(e); }
+  return structuredClone(DEFAUT);
+}
+function sauver() {
+  try { localStorage.setItem(CLE, JSON.stringify(db)); }
+  catch (e) { alert("Impossible d'enregistrer les données : " + e.message); }
+}
+
+// ===================================================================
+// Utilitaires
+// ===================================================================
+const $ = id => document.getElementById(id);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const argent = n => (Number(n) || 0).toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' });
+const arrondi = n => Math.round((Number(n) || 0) * 100) / 100;
+const aujourdhui = () => isoDate(new Date());
+function isoDate(d) {
+  const z = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+}
+function ajouterJours(iso, n) {
+  const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + Number(n || 0)); return isoDate(d);
+}
+function dateLongue(iso) {
+  if (!iso) return '';
+  return new Date(iso + 'T12:00:00').toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+function dateCourte(iso) {
+  if (!iso) return '';
+  return new Date(iso + 'T12:00:00').toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' });
+}
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+const nl2br = s => esc(s).replace(/\n/g, '<br>');
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+const eleveParId = id => db.eleves.find(e => e.id === id);
+
+function calculer(f) {
+  const p = db.parametres;
+  const sousTotal = arrondi(f.lignes.reduce((s, l) => s + (Number(l.qte) || 0) * (Number(l.prix) || 0), 0));
+  const tps = f.taxes ? arrondi(sousTotal * (f.tpsTaux ?? p.tpsTaux) / 100) : 0;
+  const tvq = f.taxes ? arrondi(sousTotal * (f.tvqTaux ?? p.tvqTaux) / 100) : 0;
+  return { sousTotal, tps, tvq, total: arrondi(sousTotal + tps + tvq) };
+}
+
+// ===================================================================
+// Navigation
+// ===================================================================
+function montrer(vue) {
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + vue));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === vue));
+  if (vue === 'factures') afficherFactures();
+  if (vue === 'eleves') afficherEleves();
+  if (vue === 'parametres') afficherParametres();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.view === 'edition') nouvelleFacture(); else montrer(b.dataset.view);
+}));
+
+// ===================================================================
+// Liste des factures
+// ===================================================================
+function afficherFactures() {
+  const q = $('f-recherche').value.trim().toLowerCase();
+  const statut = $('f-statut').value;
+  const liste = [...db.factures]
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.no || '').localeCompare(a.no || ''))
+    .filter(f => !statut || f.statut === statut)
+    .filter(f => !q || [f.no, f.client.nom, f.client.parent].join(' ').toLowerCase().includes(q));
+
+  const tb = $('liste-factures');
+  if (!db.factures.length) {
+    tb.innerHTML = `<tr><td colspan="6" class="empty">Aucune facture pour l'instant.<br><br>
+      ${db.eleves.length ? '' : 'Commence par ajouter tes élèves dans l\'onglet <b>Élèves</b>, puis '}
+      clique sur <b>+ Nouvelle facture</b>.</td></tr>`;
+  } else if (!liste.length) {
+    tb.innerHTML = `<tr><td colspan="6" class="empty">Aucune facture ne correspond.</td></tr>`;
+  } else {
+    tb.innerHTML = liste.map(f => `
+      <tr class="clickable" onclick="editerFacture('${f.id}')">
+        <td><b>${esc(f.no)}</b></td>
+        <td>${dateLongue(f.date)}</td>
+        <td>${esc(f.client.nom)}${f.client.parent ? `<br><small style="color:var(--muted)">${esc(f.client.parent)}</small>` : ''}</td>
+        <td class="num">${argent(calculer(f).total)}</td>
+        <td><span class="badge ${f.statut}">${f.statut === 'payee' ? 'Payée' : 'Impayée'}</span></td>
+        <td class="num" onclick="event.stopPropagation()">
+          <button class="btn small" onclick="basculerPayee('${f.id}')">${f.statut === 'payee' ? 'Marquer impayée' : '✓ Payée'}</button>
+          <button class="btn small" onclick="imprimer('${f.id}')" title="Imprimer / PDF">🖨️</button>
+          <button class="btn small" onclick="dupliquer('${f.id}')" title="Copier pour une nouvelle facture">⧉</button>
+          <button class="btn small danger" onclick="supprimerFacture('${f.id}')" title="Supprimer">✕</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  const cetteAnnee = db.factures.filter(f => (f.date || '').startsWith(String(annee)));
+  const impayees = db.factures.filter(f => f.statut !== 'payee');
+  $('st-annee').textContent = argent(cetteAnnee.reduce((s, f) => s + calculer(f).total, 0));
+  $('st-attente').textContent = argent(impayees.reduce((s, f) => s + calculer(f).total, 0));
+  $('st-nb').textContent = impayees.length;
+  majBanniere();
+}
+
+function basculerPayee(id) {
+  const f = db.factures.find(x => x.id === id);
+  f.statut = f.statut === 'payee' ? 'impayee' : 'payee';
+  f.datePaiement = f.statut === 'payee' ? aujourdhui() : null;
+  sauver(); afficherFactures();
+  toast(f.statut === 'payee' ? `Facture ${f.no} marquée payée` : `Facture ${f.no} marquée impayée`);
+}
+function supprimerFacture(id) {
+  const f = db.factures.find(x => x.id === id);
+  if (!confirm(`Supprimer la facture ${f.no} (${f.client.nom}) ?\nCette action est définitive.`)) return;
+  db.factures = db.factures.filter(x => x.id !== id);
+  sauver(); afficherFactures(); toast('Facture supprimée');
+}
+function dupliquer(id) {
+  const src = db.factures.find(x => x.id === id);
+  nouvelleFacture();
+  $('e-eleve').value = src.eleveId && eleveParId(src.eleveId) ? src.eleveId : '';
+  choisirEleve(false);
+  lignesEdition = src.lignes.map(l => ({ ...l, date: '' }));
+  $('e-notes').value = src.notes || '';
+  $('e-taxes').checked = !!src.taxes;
+  dessinerLignes();
+  toast('Copie créée — ajuste les dates des cours');
+}
+
+// ===================================================================
+// Édition d'une facture
+// ===================================================================
+let lignesEdition = [];
+
+function remplirSelectEleves() {
+  const s = $('e-eleve');
+  const tri = [...db.eleves].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+  s.innerHTML = `<option value="">— Choisir un élève —</option>` +
+    tri.map(e => `<option value="${e.id}">${esc(e.nom)}${e.parent ? ' (' + esc(e.parent) + ')' : ''}</option>`).join('') +
+    `<option value="__nouveau">+ Nouvel élève…</option>`;
+}
+
+function prochainNumero() {
+  const p = db.parametres;
+  let n = Number(p.prochain) || 1;
+  const existe = no => db.factures.some(f => f.no === no);
+  while (existe(p.prefixe + String(n).padStart(3, '0'))) n++;
+  return p.prefixe + String(n).padStart(3, '0');
+}
+
+function nouvelleFacture() {
+  factureEnCours = null;
+  const p = db.parametres;
+  remplirSelectEleves();
+  $('titre-edition').textContent = 'Nouvelle facture';
+  $('e-eleve').value = '';
+  $('e-no').value = prochainNumero();
+  $('e-date').value = aujourdhui();
+  $('e-echeance').value = ajouterJours(aujourdhui(), p.delai);
+  $('e-notes').value = '';
+  $('e-taxes').checked = !!p.taxes;
+  $('e-payee').checked = false;
+  $('e-eleve-hint').textContent = '';
+  lignesEdition = [];
+  dessinerLignes();
+  dessinerChips();
+  montrer('edition');
+}
+
+function editerFacture(id) {
+  const f = db.factures.find(x => x.id === id);
+  factureEnCours = id;
+  remplirSelectEleves();
+  $('titre-edition').textContent = 'Facture ' + f.no;
+  $('e-eleve').value = f.eleveId && eleveParId(f.eleveId) ? f.eleveId : '';
+  $('e-no').value = f.no;
+  $('e-date').value = f.date;
+  $('e-echeance').value = f.echeance || '';
+  $('e-notes').value = f.notes || '';
+  $('e-taxes').checked = !!f.taxes;
+  $('e-payee').checked = f.statut === 'payee';
+  lignesEdition = f.lignes.map(l => ({ ...l }));
+  choisirEleve(false);
+  dessinerLignes();
+  dessinerChips();
+  montrer('edition');
+}
+
+function tarifEleve() {
+  const e = eleveParId($('e-eleve').value);
+  return e && e.tarif !== '' && e.tarif != null ? Number(e.tarif) : Number(db.parametres.tarif) || 0;
+}
+
+function choisirEleve(ajouterSiVide = true) {
+  const v = $('e-eleve').value;
+  if (v === '__nouveau') { $('e-eleve').value = ''; editerEleve(null, true); return; }
+  const e = eleveParId(v);
+  $('e-eleve-hint').textContent = e
+    ? [e.parent && 'Facturé à : ' + e.parent, e.courriel, 'Tarif : ' + argent(tarifEleve()) + ' / h'].filter(Boolean).join(' · ')
+    : '';
+  if (e && ajouterSiVide && !lignesEdition.length) ajouterLigne();
+  dessinerChips();
+}
+
+function ajouterLigne(desc = 'Cours privé', qte = 1, prix = null, date = null) {
+  lignesEdition.push({ date: date ?? aujourdhui(), desc, qte, prix: prix ?? tarifEleve() });
+  dessinerLignes();
+  const champs = document.querySelectorAll('#e-lignes tr:last-child input');
+  if (champs[0] && date === null) champs[0].focus();
+}
+
+function dessinerLignes() {
+  const tb = $('e-lignes');
+  if (!lignesEdition.length) {
+    tb.innerHTML = `<tr><td colspan="6" class="empty" style="padding:16px">Aucune ligne. Utilise les boutons ci-dessous pour ajouter des cours.</td></tr>`;
+  } else {
+    tb.innerHTML = lignesEdition.map((l, i) => `
+      <tr>
+        <td><input type="date" value="${esc(l.date)}" oninput="majLigne(${i},'date',this.value)"></td>
+        <td><input value="${esc(l.desc)}" oninput="majLigne(${i},'desc',this.value)"></td>
+        <td><input type="number" step="0.25" class="num" style="text-align:right" value="${esc(l.qte)}" oninput="majLigne(${i},'qte',this.value)"></td>
+        <td><input type="number" step="0.01" style="text-align:right" value="${esc(l.prix)}" oninput="majLigne(${i},'prix',this.value)"></td>
+        <td class="num" id="mt-${i}">${argent((Number(l.qte) || 0) * (Number(l.prix) || 0))}</td>
+        <td><button class="btn small link" style="color:var(--danger)" title="Retirer" onclick="retirerLigne(${i})">✕</button></td>
+      </tr>`).join('');
+  }
+  majTotaux();
+}
+function majLigne(i, champ, val) {
+  lignesEdition[i][champ] = val;
+  const l = lignesEdition[i];
+  const cell = $('mt-' + i);
+  if (cell) cell.textContent = argent((Number(l.qte) || 0) * (Number(l.prix) || 0));
+  majTotaux();
+}
+function retirerLigne(i) { lignesEdition.splice(i, 1); dessinerLignes(); }
+
+function dessinerChips() {
+  $('e-chips').innerHTML = db.parametres.prestations.map((p, i) =>
+    `<button class="chip" onclick="ajouterPrestationLigne(${i})">+ ${esc(p.desc)}</button>`).join('');
+}
+function ajouterPrestationLigne(i) {
+  const p = db.parametres.prestations[i];
+  const qte = Number(p.qte) || 1;
+  // prix vide = tarif horaire de l'élève
+  const prix = p.prix === '' || p.prix == null ? tarifEleve() : Number(p.prix);
+  ajouterLigne(p.desc, qte, prix);
+}
+
+function majTotaux() {
+  const t = calculer({ lignes: lignesEdition, taxes: $('e-taxes').checked });
+  const p = db.parametres;
+  $('e-totaux').innerHTML = `
+    <div><span>Sous-total</span><span>${argent(t.sousTotal)}</span></div>
+    ${$('e-taxes').checked ? `
+      <div><span>TPS (${p.tpsTaux} %)</span><span>${argent(t.tps)}</span></div>
+      <div><span>TVQ (${p.tvqTaux} %)</span><span>${argent(t.tvq)}</span></div>` : ''}
+    <div class="grand"><span>Total</span><span>${argent(t.total)}</span></div>`;
+}
+
+// Série de cours hebdomadaires
+function ouvrirSerie() {
+  $('s-debut').value = aujourdhui();
+  $('s-prix').value = tarifEleve();
+  $('dlg-serie').showModal();
+}
+function ajouterSerie() {
+  const n = Math.max(1, Math.min(52, Number($('s-nb').value) || 1));
+  for (let k = 0; k < n; k++) {
+    lignesEdition.push({
+      date: ajouterJours($('s-debut').value || aujourdhui(), 7 * k),
+      desc: $('s-desc').value, qte: Number($('s-qte').value) || 1, prix: Number($('s-prix').value) || 0,
+    });
+  }
+  $('dlg-serie').close();
+  dessinerLignes();
+  toast(n + ' cours ajoutés');
+}
+
+function lireFormulaire() {
+  const e = eleveParId($('e-eleve').value);
+  const p = db.parametres;
+  const ancienne = factureEnCours ? db.factures.find(x => x.id === factureEnCours) : null;
+  return {
+    id: factureEnCours || uid(),
+    no: $('e-no').value.trim(),
+    eleveId: e ? e.id : (ancienne?.eleveId || null),
+    // copie des infos du client au moment de la facture
+    client: e
+      ? { nom: e.nom, parent: e.parent || '', courriel: e.courriel || '', tel: e.tel || '', adresse: e.adresse || '' }
+      : (ancienne?.client || { nom: '', parent: '', courriel: '', tel: '', adresse: '' }),
+    date: $('e-date').value,
+    echeance: $('e-echeance').value,
+    lignes: lignesEdition.filter(l => l.desc || Number(l.prix)).map(l => ({
+      date: l.date, desc: l.desc, qte: Number(l.qte) || 0, prix: Number(l.prix) || 0,
+    })),
+    notes: $('e-notes').value,
+    taxes: $('e-taxes').checked,
+    tpsTaux: ancienne?.tpsTaux ?? p.tpsTaux,
+    tvqTaux: ancienne?.tvqTaux ?? p.tvqTaux,
+    statut: $('e-payee').checked ? 'payee' : 'impayee',
+    datePaiement: $('e-payee').checked ? (ancienne?.datePaiement || aujourdhui()) : null,
+  };
+}
+
+function enregistrerFacture(etImprimer) {
+  const f = lireFormulaire();
+  if (!f.client.nom) { alert('Choisis un élève.'); $('e-eleve').focus(); return; }
+  if (!f.no) { alert('Indique un numéro de facture.'); return; }
+  if (!f.lignes.length) { alert('Ajoute au moins une ligne à la facture.'); return; }
+  if (db.factures.some(x => x.no === f.no && x.id !== f.id)) {
+    alert(`Le numéro ${f.no} est déjà utilisé par une autre facture.`); return;
+  }
+  const i = db.factures.findIndex(x => x.id === f.id);
+  if (i >= 0) db.factures[i] = f;
+  else {
+    db.factures.push(f);
+    // avance le compteur si on a utilisé le numéro suggéré
+    const p = db.parametres;
+    if (f.no.startsWith(p.prefixe)) {
+      const n = parseInt(f.no.slice(p.prefixe.length), 10);
+      if (n >= Number(p.prochain)) p.prochain = n + 1;
+    }
+  }
+  sauver();
+  toast('Facture ' + f.no + ' enregistrée');
+  montrer('factures');
+  if (etImprimer) imprimer(f.id);
+}
+
+function apercu() {
+  const f = lireFormulaire();
+  if (!f.client.nom) { alert('Choisis un élève.'); return; }
+  imprimerFacture(f);
+}
+
+// ===================================================================
+// Impression / PDF
+// ===================================================================
+function imprimer(id) { imprimerFacture(db.factures.find(x => x.id === id)); }
+
+function htmlFacture(f) {
+  const p = db.parametres;
+  const t = calculer(f);
+  const c = f.client;
+  return `
+  <div class="facture">
+    <div class="tete">
+      <div class="emetteur">
+        ${p.logo ? `<img src="${p.logo}" alt=""><br>` : ''}
+        <strong>${esc(p.nom || 'Ton nom')}</strong><br>
+        ${p.entreprise ? esc(p.entreprise) + '<br>' : ''}
+        ${p.adresse ? nl2br(p.adresse) + '<br>' : ''}
+        ${[p.tel, p.courriel].filter(Boolean).map(esc).join(' · ')}
+        ${f.taxes && (p.tpsNo || p.tvqNo) ? `<div class="taxnos">${p.tpsNo ? 'TPS : ' + esc(p.tpsNo) : ''}${p.tpsNo && p.tvqNo ? ' · ' : ''}${p.tvqNo ? 'TVQ : ' + esc(p.tvqNo) : ''}</div>` : ''}
+      </div>
+      <div class="titre">
+        <h1>FACTURE</h1>
+        <table>
+          <tr><td>N° :</td><td><b>${esc(f.no)}</b></td></tr>
+          <tr><td>Date :</td><td>${dateLongue(f.date)}</td></tr>
+          ${f.echeance && f.statut !== 'payee' ? `<tr><td>Payable avant le :</td><td>${dateLongue(f.echeance)}</td></tr>` : ''}
+        </table>
+        ${f.statut === 'payee' ? `<div class="paye">PAYÉE${f.datePaiement ? ' – ' + dateCourte(f.datePaiement) : ''}</div>` : ''}
+      </div>
+    </div>
+
+    <div class="client">
+      <div class="lbl">Facturé à</div>
+      <strong>${esc(c.parent || c.nom)}</strong><br>
+      ${c.parent ? 'Pour : ' + esc(c.nom) + '<br>' : ''}
+      ${c.adresse ? nl2br(c.adresse) + '<br>' : ''}
+      ${[c.tel, c.courriel].filter(Boolean).map(esc).join(' · ')}
+    </div>
+
+    <table class="items">
+      <thead><tr><th style="width:110px">Date</th><th>Description</th><th class="num">Qté</th><th class="num">Prix</th><th class="num">Montant</th></tr></thead>
+      <tbody>
+        ${[...f.lignes].sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(l => `
+          <tr>
+            <td>${l.date ? dateCourte(l.date) : ''}</td>
+            <td>${esc(l.desc)}</td>
+            <td class="num">${String(l.qte).replace('.', ',')}</td>
+            <td class="num">${argent(l.prix)}</td>
+            <td class="num">${argent(l.qte * l.prix)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+
+    <div class="totaux">
+      <div><span>Sous-total</span><span>${argent(t.sousTotal)}</span></div>
+      ${f.taxes ? `
+        <div><span>TPS (${f.tpsTaux} %)</span><span>${argent(t.tps)}</span></div>
+        <div><span>TVQ (${f.tvqTaux} %)</span><span>${argent(t.tvq)}</span></div>` : ''}
+      <div class="grand"><span>Total</span><span>${argent(t.total)}</span></div>
+    </div>
+
+    ${f.notes ? `<div class="pied">${esc(f.notes)}</div>` : ''}
+    ${p.paiement ? `<div class="pied">${esc(p.paiement)}</div>` : ''}
+  </div>`;
+}
+
+function imprimerFacture(f) {
+  $('impression').innerHTML = htmlFacture(f);
+  // le titre devient le nom de fichier proposé pour le PDF
+  const titre = document.title;
+  document.title = `Facture ${f.no} - ${f.client.nom}`;
+  const fin = () => { document.title = titre; window.removeEventListener('afterprint', fin); };
+  window.addEventListener('afterprint', fin);
+  setTimeout(() => window.print(), 50);
+}
+
+// ===================================================================
+// Élèves
+// ===================================================================
+let eleveEnCours = null, retourVersFacture = false;
+
+function afficherEleves() {
+  const tb = $('liste-eleves');
+  const tri = [...db.eleves].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+  if (!tri.length) {
+    tb.innerHTML = `<tr><td colspan="6" class="empty">Aucun élève. Clique sur <b>+ Ajouter un élève</b>.</td></tr>`;
+    return;
+  }
+  tb.innerHTML = tri.map(e => {
+    const du = db.factures.filter(f => f.eleveId === e.id && f.statut !== 'payee').reduce((s, f) => s + calculer(f).total, 0);
+    return `
+    <tr class="clickable" onclick="editerEleve('${e.id}')">
+      <td><b>${esc(e.nom)}</b></td>
+      <td>${esc(e.parent)}</td>
+      <td>${esc(e.courriel)}</td>
+      <td class="num">${e.tarif !== '' && e.tarif != null ? argent(e.tarif) : '<span style="color:var(--muted)">défaut</span>'}</td>
+      <td class="num" style="${du ? 'color:var(--warn);font-weight:600' : ''}">${argent(du)}</td>
+      <td class="num" onclick="event.stopPropagation()">
+        <button class="btn small" onclick="factureEleve('${e.id}')">+ Facture</button>
+        <button class="btn small danger" onclick="supprimerEleve('${e.id}')" title="Supprimer">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function editerEleve(id = null, depuisFacture = false) {
+  eleveEnCours = id; retourVersFacture = depuisFacture;
+  const e = id ? eleveParId(id) : {};
+  $('dlg-eleve-titre').textContent = id ? 'Modifier l\'élève' : 'Nouvel élève';
+  $('d-nom').value = e.nom || '';
+  $('d-parent').value = e.parent || '';
+  $('d-courriel').value = e.courriel || '';
+  $('d-tel').value = e.tel || '';
+  $('d-adresse').value = e.adresse || '';
+  $('d-tarif').value = e.tarif ?? '';
+  $('dlg-eleve').showModal();
+  $('d-nom').focus();
+}
+function enregistrerEleve() {
+  const nom = $('d-nom').value.trim();
+  if (!nom) { alert("Indique le nom de l'élève."); return; }
+  const data = {
+    nom, parent: $('d-parent').value.trim(), courriel: $('d-courriel').value.trim(),
+    tel: $('d-tel').value.trim(), adresse: $('d-adresse').value.trim(), tarif: $('d-tarif').value,
+  };
+  let id = eleveEnCours;
+  if (id) Object.assign(eleveParId(id), data);
+  else { id = uid(); db.eleves.push({ id, ...data }); }
+  sauver();
+  $('dlg-eleve').close();
+  toast('Élève enregistré');
+  if (retourVersFacture) {
+    remplirSelectEleves(); $('e-eleve').value = id; choisirEleve();
+  } else afficherEleves();
+}
+function supprimerEleve(id) {
+  const e = eleveParId(id);
+  const nb = db.factures.filter(f => f.eleveId === id).length;
+  if (!confirm(`Supprimer ${e.nom} ?` + (nb ? `\nSes ${nb} facture(s) seront conservées.` : ''))) return;
+  db.eleves = db.eleves.filter(x => x.id !== id);
+  sauver(); afficherEleves(); toast('Élève supprimé');
+}
+function factureEleve(id) {
+  nouvelleFacture(); $('e-eleve').value = id; choisirEleve();
+}
+
+// ===================================================================
+// Paramètres
+// ===================================================================
+let prestationsEdition = [];
+
+function afficherParametres() {
+  const p = db.parametres;
+  $('p-nom').value = p.nom; $('p-entreprise').value = p.entreprise; $('p-adresse').value = p.adresse;
+  $('p-tel').value = p.tel; $('p-courriel').value = p.courriel;
+  $('p-tarif').value = p.tarif; $('p-prefixe').value = p.prefixe; $('p-prochain').value = p.prochain;
+  $('p-delai').value = p.delai; $('p-paiement').value = p.paiement;
+  $('p-taxes').checked = p.taxes; $('p-tps-taux').value = p.tpsTaux; $('p-tps-no').value = p.tpsNo;
+  $('p-tvq-taux').value = p.tvqTaux; $('p-tvq-no').value = p.tvqNo;
+  majLogo();
+  prestationsEdition = p.prestations.map(x => ({ ...x }));
+  dessinerPrestations();
+}
+function dessinerPrestations() {
+  $('p-prestations').innerHTML = prestationsEdition.map((x, i) => `
+    <tr>
+      <td><input value="${esc(x.desc)}" oninput="prestationsEdition[${i}].desc=this.value"></td>
+      <td><input type="number" step="0.25" style="text-align:right" value="${esc(x.qte)}" oninput="prestationsEdition[${i}].qte=this.value"></td>
+      <td><input type="number" step="0.01" style="text-align:right" placeholder="tarif élève" value="${esc(x.prix)}" oninput="prestationsEdition[${i}].prix=this.value"></td>
+      <td><button class="btn small link" style="color:var(--danger)" onclick="prestationsEdition.splice(${i},1);dessinerPrestations()">✕</button></td>
+    </tr>`).join('');
+}
+function ajouterPrestation() { prestationsEdition.push({ desc: '', qte: 1, prix: '' }); dessinerPrestations(); }
+
+function enregistrerParametres() {
+  const p = db.parametres;
+  Object.assign(p, {
+    nom: $('p-nom').value.trim(), entreprise: $('p-entreprise').value.trim(), adresse: $('p-adresse').value.trim(),
+    tel: $('p-tel').value.trim(), courriel: $('p-courriel').value.trim(),
+    tarif: Number($('p-tarif').value) || 0, prefixe: $('p-prefixe').value, prochain: Number($('p-prochain').value) || 1,
+    delai: Number($('p-delai').value) || 0, paiement: $('p-paiement').value,
+    taxes: $('p-taxes').checked, tpsTaux: Number($('p-tps-taux').value) || 0, tpsNo: $('p-tps-no').value.trim(),
+    tvqTaux: Number($('p-tvq-taux').value) || 0, tvqNo: $('p-tvq-no').value.trim(),
+    prestations: prestationsEdition.filter(x => x.desc.trim()),
+  });
+  sauver(); afficherParametres(); toast('Paramètres enregistrés');
+}
+
+function chargerLogo(ev) {
+  const fichier = ev.target.files[0];
+  if (!fichier) return;
+  const img = new Image();
+  img.onload = () => {
+    // réduit l'image pour ne pas alourdir les données
+    const max = 400, r = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = img.width * r; c.height = img.height * r;
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    db.parametres.logo = c.toDataURL('image/png');
+    sauver(); majLogo(); toast('Logo ajouté');
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(fichier);
+}
+function retirerLogo() { db.parametres.logo = ''; sauver(); majLogo(); $('p-logo').value = ''; }
+function majLogo() {
+  const l = db.parametres.logo;
+  $('p-logo-preview').hidden = !l; $('p-logo-retirer').hidden = !l;
+  if (l) $('p-logo-preview').src = l;
+}
+
+// ===================================================================
+// Sauvegarde / export
+// ===================================================================
+function telecharger(nom, contenu, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([contenu], { type }));
+  a.download = nom; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function exporterSauvegarde() {
+  db.derniereSauvegarde = new Date().toISOString();
+  sauver();
+  telecharger(`sauvegarde-factures-${aujourdhui()}.json`, JSON.stringify(db, null, 2), 'application/json');
+  majBanniere(); toast('Sauvegarde téléchargée');
+}
+function importerSauvegarde(ev) {
+  const fichier = ev.target.files[0];
+  if (!fichier) return;
+  fichier.text().then(txt => {
+    const d = JSON.parse(txt);
+    if (!Array.isArray(d.factures) || !Array.isArray(d.eleves)) throw new Error('fichier non reconnu');
+    if (!confirm(`Restaurer cette sauvegarde (${d.eleves.length} élèves, ${d.factures.length} factures) ?\nLes données actuelles seront remplacées.`)) return;
+    db = { ...structuredClone(DEFAUT), ...d, parametres: { ...DEFAUT.parametres, ...d.parametres } };
+    sauver(); montrer('factures'); toast('Sauvegarde restaurée');
+  }).catch(e => alert('Impossible de lire ce fichier : ' + e.message))
+    .finally(() => { ev.target.value = ''; });
+}
+function exporterCSV() {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const nb = n => String(arrondi(n)).replace('.', ',');
+  const lignes = [['Numéro', 'Date', 'Élève', 'Facturé à', 'Sous-total', 'TPS', 'TVQ', 'Total', 'Statut', 'Date de paiement']];
+  [...db.factures].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(f => {
+    const t = calculer(f);
+    lignes.push([f.no, f.date, f.client.nom, f.client.parent, nb(t.sousTotal), nb(t.tps), nb(t.tvq), nb(t.total),
+      f.statut === 'payee' ? 'Payée' : 'Impayée', f.datePaiement || '']);
+  });
+  // BOM + point-virgule : s'ouvre correctement dans Excel en français
+  telecharger(`factures-${aujourdhui()}.csv`, '﻿' + lignes.map(l => l.map(q).join(';')).join('\r\n'), 'text/csv');
+}
+function majBanniere() {
+  const d = db.derniereSauvegarde;
+  $('derniere-sauvegarde').textContent = d ? dateLongue(d.slice(0, 10)) : 'jamais';
+  const vieux = !d || (Date.now() - new Date(d)) > 30 * 864e5;
+  $('banner-sauvegarde').classList.toggle('show', db.factures.length > 0 && vieux);
+}
+
+// ===================================================================
+// Démarrage
+// ===================================================================
+if (!db.parametres.nom) {
+  montrer('parametres');
+  setTimeout(() => toast('Bienvenue ! Commence par entrer tes informations.'), 300);
+} else {
+  montrer('factures');
+}
+</script>
+</body>
+</html>
