@@ -125,6 +125,7 @@
   .banner.show { display: flex; }
   .banner span { flex: 1; }
   dialog { border: 0; border-radius: var(--radius); padding: 24px; width: min(520px, 92vw); box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  dialog .btn { white-space: normal; }
   dialog::backdrop { background: rgba(20,30,45,.4); }
   .logo-preview { max-height: 60px; max-width: 200px; display: block; margin-top: 8px; }
 
@@ -386,6 +387,17 @@
   <div class="actions">
     <button class="btn primary" onclick="ajouterSerie()">Ajouter</button>
     <button class="btn" onclick="document.getElementById('dlg-serie').close()">Annuler</button>
+  </div>
+</dialog>
+
+<!-- Dialogue rappel de sauvegarde -->
+<dialog id="dlg-rappel">
+  <h2>💾 C'est le moment de faire une sauvegarde</h2>
+  <p><span id="rappel-derniere"></span> Une sauvegarde par mois permet de ne jamais perdre tes élèves et tes factures, même si l'ordinateur brise.</p>
+  <p class="hint">Garde le fichier téléchargé dans iCloud Drive ou sur une clé USB.</p>
+  <div class="actions">
+    <button class="btn primary" onclick="sauvegarderDepuisRappel()">Sauvegarder maintenant</button>
+    <button class="btn" onclick="reporterRappel()">Me le rappeler dans 3 jours</button>
   </div>
 </dialog>
 
@@ -756,7 +768,7 @@ function enregistrerFacture(etImprimer) {
     }
   }
   sauver();
-  toast('Facture ' + f.no + ' enregistrée');
+  if (!sauvegardeAutoSiBesoin()) toast('Facture ' + f.no + ' enregistrée');
   montrer('factures');
   if (etImprimer) imprimer(f.id);
 }
@@ -987,11 +999,18 @@ function telecharger(nom, contenu, type) {
   a.download = nom; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-function exporterSauvegarde() {
+function exporterSauvegarde(auto = false) {
   db.derniereSauvegarde = new Date().toISOString();
+  db.rappelReporte = null;
   sauver();
   telecharger(`sauvegarde-factures-${aujourdhui()}.json`, JSON.stringify(db, null, 2), 'application/json');
-  majBanniere(); toast('Sauvegarde téléchargée');
+  majBanniere(); toast(auto ? 'Facture enregistrée + sauvegarde automatique téléchargée' : 'Sauvegarde téléchargée');
+}
+// Sauvegarde automatique au moment d'enregistrer une facture (le clic autorise le téléchargement dans Safari)
+function sauvegardeAutoSiBesoin() {
+  const d = db.derniereSauvegarde;
+  if (!d || (Date.now() - new Date(d)) > 7 * 864e5) { exporterSauvegarde(true); return true; }
+  return false;
 }
 function importerSauvegarde(ev) {
   const fichier = ev.target.files[0];
@@ -1017,12 +1036,39 @@ function exporterCSV() {
   // BOM + point-virgule : s'ouvre correctement dans Excel en français
   telecharger(`factures-${aujourdhui()}.csv`, '﻿' + lignes.map(l => l.map(q).join(';')).join('\r\n'), 'text/csv');
 }
+// Une sauvegarde est due 30 jours après la dernière (ou après la première facture si aucune)
+function sauvegardeEnRetard() {
+  if (!db.factures.length) return false;
+  const depuis = db.derniereSauvegarde || db.factures.map(f => f.date).filter(Boolean).sort()[0];
+  return !depuis || (Date.now() - new Date(depuis)) > 30 * 864e5;
+}
 function majBanniere() {
   const d = db.derniereSauvegarde;
   $('derniere-sauvegarde').textContent = d ? dateLongue(d.slice(0, 10)) : 'jamais';
-  const vieux = !d || (Date.now() - new Date(d)) > 30 * 864e5;
-  $('banner-sauvegarde').classList.toggle('show', db.factures.length > 0 && vieux);
+  $('banner-sauvegarde').classList.toggle('show', sauvegardeEnRetard());
 }
+
+// Rappel mensuel : fenêtre à l'ouverture, « Plus tard » la repousse de 3 jours
+function verifierRappel() {
+  const dlg = $('dlg-rappel');
+  if (dlg.open || document.querySelector('dialog[open]') || !sauvegardeEnRetard()) return;
+  if (db.rappelReporte && Date.now() < new Date(db.rappelReporte)) return;
+  $('rappel-derniere').textContent = db.derniereSauvegarde
+    ? 'Ta dernière sauvegarde date du ' + dateLongue(db.derniereSauvegarde.slice(0, 10)) + '.'
+    : "Tu n'as encore jamais fait de sauvegarde.";
+  dlg.showModal();
+}
+function reporterRappel() {
+  db.rappelReporte = new Date(Date.now() + 3 * 864e5).toISOString();
+  sauver();
+  $('dlg-rappel').close();
+}
+function sauvegarderDepuisRappel() {
+  $('dlg-rappel').close();
+  exporterSauvegarde();
+}
+// l'app peut rester ouverte longtemps dans le Dock : on revérifie à chaque retour
+document.addEventListener('visibilitychange', () => { if (!document.hidden) verifierRappel(); });
 
 // ===================================================================
 // Démarrage
@@ -1032,6 +1078,7 @@ if (!db.parametres.nom) {
   setTimeout(() => toast('Bienvenue ! Commence par entrer tes informations.'), 300);
 } else {
   montrer('factures');
+  setTimeout(verifierRappel, 400);
 }
 </script>
 </body>
