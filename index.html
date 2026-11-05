@@ -255,7 +255,7 @@
     </div>
 
     <div class="actions">
-      <button class="btn primary" onclick="enregistrerFacture(true)">💾 Enregistrer et imprimer / PDF</button>
+      <button class="btn primary" onclick="enregistrerFacture(true)">💾 Enregistrer et télécharger le PDF</button>
       <button class="btn" onclick="enregistrerFacture(false)">Enregistrer</button>
       <button class="btn" onclick="apercu()">Aperçu</button>
       <button class="btn" onclick="montrer('factures')">Annuler</button>
@@ -403,6 +403,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="jspdf.umd.min.js"></script>
 <script>
 // ===================================================================
 // Données
@@ -532,7 +533,8 @@ function afficherFactures() {
         <td><span class="badge ${f.statut}">${f.statut === 'payee' ? 'Payée' : 'Impayée'}</span></td>
         <td class="num" onclick="event.stopPropagation()">
           <button class="btn small" onclick="basculerPayee('${f.id}')">${f.statut === 'payee' ? 'Marquer impayée' : '✓ Payée'}</button>
-          <button class="btn small" onclick="imprimer('${f.id}')" title="Imprimer / PDF">🖨️</button>
+          <button class="btn small" onclick="telechargerPDF('${f.id}')" title="Télécharger le PDF">PDF</button>
+          <button class="btn small" onclick="imprimer('${f.id}')" title="Imprimer sur papier">🖨️</button>
           <button class="btn small" onclick="dupliquer('${f.id}')" title="Copier pour une nouvelle facture">⧉</button>
           <button class="btn small danger" onclick="supprimerFacture('${f.id}')" title="Supprimer">✕</button>
         </td>
@@ -748,7 +750,7 @@ function lireFormulaire() {
   };
 }
 
-function enregistrerFacture(etImprimer) {
+function enregistrerFacture(etPdf) {
   const f = lireFormulaire();
   if (!f.client.nom) { alert('Choisis un élève.'); $('e-eleve').focus(); return; }
   if (!f.no) { alert('Indique un numéro de facture.'); return; }
@@ -768,9 +770,14 @@ function enregistrerFacture(etImprimer) {
     }
   }
   sauver();
-  if (!sauvegardeAutoSiBesoin()) toast('Facture ' + f.no + ' enregistrée');
   montrer('factures');
-  if (etImprimer) imprimer(f.id);
+  if (etPdf) {
+    telechargerPDF(f.id);
+    // délai : Safari peut ignorer deux téléchargements lancés au même instant
+    setTimeout(sauvegardeAutoSiBesoin, 800);
+  } else if (!sauvegardeAutoSiBesoin()) {
+    toast('Facture ' + f.no + ' enregistrée');
+  }
 }
 
 function apercu() {
@@ -843,6 +850,145 @@ function htmlFacture(f) {
     ${f.notes ? `<div class="pied">${esc(f.notes)}</div>` : ''}
     ${p.paiement ? `<div class="pied">${esc(p.paiement)}</div>` : ''}
   </div>`;
+}
+
+// Les polices de base du PDF ne connaissent que les caractères latins
+function textePDF(s) {
+  return String(s ?? '')
+    .replace(/[   ]/g, ' ')
+    .replace(/[–—]/g, '-')
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/œ/g, 'oe').replace(/Œ/g, 'OE')
+    .replace(/[^\x00-\xff]/g, '');
+}
+// Dimensions lues dans l'en-tête PNG (le logo est toujours converti en PNG au chargement)
+function taillePNG(dataUrl) {
+  const o = atob(dataUrl.split(',')[1].slice(0, 44));
+  const lire = i => (o.charCodeAt(i) << 24 | o.charCodeAt(i + 1) << 16 | o.charCodeAt(i + 2) << 8 | o.charCodeAt(i + 3)) >>> 0;
+  return { l: lire(16), h: lire(20) };
+}
+
+function creerPDF(f) {
+  const doc = new jspdf.jsPDF({ unit: 'mm', format: 'letter' });
+  const p = db.parametres, t = calculer(f), c = f.client;
+  const G = 18, D = 215.9 - G, BAS = 279.4 - G, LH = 5;
+  const X_DESC = G + 24, X_QTE = 140, X_PRIX = 168;
+  const ecrire = (s, x, y, o) => doc.text(textePDF(s), x, y, o);
+  const police = (style, taille, gris = 20) => {
+    doc.setFont('helvetica', style); doc.setFontSize(taille); doc.setTextColor(gris);
+  };
+  const bloc = (s, x, y, largeur) => {
+    const lignes = doc.splitTextToSize(textePDF(s), largeur);
+    lignes.forEach((l, i) => doc.text(l, x, y + i * LH));
+    return y + lignes.length * LH;
+  };
+
+  // Émetteur
+  let y = G;
+  if (p.logo) {
+    const { l, h } = taillePNG(p.logo);
+    const r = Math.min(55 / l, 22 / h);
+    doc.addImage(p.logo, 'PNG', G, y, l * r, h * r);
+    y += h * r + 6;
+  } else y += 4;
+  police('bold', 13); ecrire(p.nom || 'Ton nom', G, y); y += 6;
+  police('normal', 10);
+  if (p.entreprise) y = bloc(p.entreprise, G, y, 95);
+  if (p.adresse) y = bloc(p.adresse, G, y, 95);
+  const contact = [p.tel, p.courriel].filter(Boolean).join(' · ');
+  if (contact) y = bloc(contact, G, y, 95);
+  if (f.taxes && (p.tpsNo || p.tvqNo)) {
+    police('normal', 8, 100);
+    y = bloc([p.tpsNo && 'TPS : ' + p.tpsNo, p.tvqNo && 'TVQ : ' + p.tvqNo].filter(Boolean).join(' · '), G, y, 95);
+  }
+
+  // Titre et numéro
+  let yd = G + 6;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(24); doc.setTextColor(47, 111, 179);
+  ecrire('FACTURE', D, yd, { align: 'right' }); yd += 9;
+  police('normal', 10);
+  ecrire('N° : ' + f.no, D, yd, { align: 'right' }); yd += LH;
+  ecrire('Date : ' + dateLongue(f.date), D, yd, { align: 'right' }); yd += LH;
+  if (f.echeance && f.statut !== 'payee') {
+    ecrire('Payable avant le : ' + dateLongue(f.echeance), D, yd, { align: 'right' }); yd += LH;
+  }
+  if (f.statut === 'payee') {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(46, 139, 87);
+    ecrire('PAYÉE' + (f.datePaiement ? ' - ' + dateCourte(f.datePaiement) : ''), D, yd + 2, { align: 'right' }); yd += 8;
+  }
+
+  // Client
+  y = Math.max(y, yd) + 8;
+  police('normal', 8, 110); ecrire('FACTURÉ À', G, y); y += LH;
+  police('bold', 10); ecrire(c.parent || c.nom, G, y); y += LH;
+  police('normal', 10);
+  if (c.parent) y = bloc('Pour : ' + c.nom, G, y, 120);
+  if (c.adresse) y = bloc(c.adresse, G, y, 120);
+  const contactClient = [c.tel, c.courriel].filter(Boolean).join(' · ');
+  if (contactClient) y = bloc(contactClient, G, y, 120);
+  y += 6;
+
+  // Lignes
+  const entete = () => {
+    police('bold', 9);
+    ecrire('DATE', G, y); ecrire('DESCRIPTION', X_DESC, y);
+    ecrire('QTÉ', X_QTE, y, { align: 'right' }); ecrire('PRIX', X_PRIX, y, { align: 'right' });
+    ecrire('MONTANT', D, y, { align: 'right' });
+    doc.setDrawColor(20); doc.setLineWidth(0.5); doc.line(G, y + 2, D, y + 2);
+    y += 7;
+  };
+  entete();
+  [...f.lignes].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(l => {
+    police('normal', 10);
+    const desc = doc.splitTextToSize(textePDF(l.desc), X_QTE - X_DESC - 12);
+    if (y + desc.length * LH > BAS) { doc.addPage(); y = G; entete(); police('normal', 10); }
+    ecrire(l.date ? dateCourte(l.date) : '', G, y);
+    desc.forEach((d, i) => doc.text(d, X_DESC, y + i * LH));
+    ecrire(String(l.qte).replace('.', ','), X_QTE, y, { align: 'right' });
+    ecrire(argent(l.prix), X_PRIX, y, { align: 'right' });
+    ecrire(argent(l.qte * l.prix), D, y, { align: 'right' });
+    y += desc.length * LH;
+    doc.setDrawColor(220); doc.setLineWidth(0.2); doc.line(G, y - 2.5, D, y - 2.5);
+    y += 2;
+  });
+
+  // Totaux
+  if (y + 28 > BAS) { doc.addPage(); y = G; }
+  y += 3;
+  const X_TOT = 135;
+  const ligneTotal = (lbl, val) => {
+    ecrire(lbl, X_TOT, y); ecrire(val, D, y, { align: 'right' }); y += 6;
+  };
+  police('normal', 10);
+  ligneTotal('Sous-total', argent(t.sousTotal));
+  if (f.taxes) {
+    ligneTotal(`TPS (${String(f.tpsTaux).replace('.', ',')} %)`, argent(t.tps));
+    ligneTotal(`TVQ (${String(f.tvqTaux).replace('.', ',')} %)`, argent(t.tvq));
+  }
+  doc.setDrawColor(20); doc.setLineWidth(0.5); doc.line(X_TOT, y - 3.5, D, y - 3.5);
+  y += 2;
+  police('bold', 12); ligneTotal('Total', argent(t.total));
+
+  // Notes et instructions de paiement
+  police('normal', 9, 70);
+  [f.notes, p.paiement].filter(Boolean).forEach(texte => {
+    const lignes = doc.splitTextToSize(textePDF(texte), D - G);
+    y += 6;
+    if (y + lignes.length * LH > BAS) { doc.addPage(); y = G; police('normal', 9, 70); }
+    lignes.forEach(l => { doc.text(l, G, y); y += LH; });
+  });
+
+  doc.setProperties({ title: textePDF(`Facture ${f.no} - ${c.nom}`) });
+  return doc;
+}
+
+function telechargerPDF(id) {
+  const f = db.factures.find(x => x.id === id);
+  if (!window.jspdf) { imprimer(id); return; } // bibliothèque absente : on retombe sur l'impression
+  const nom = `Facture ${f.no} - ${f.client.nom}`.replace(/[\/\\:*?"<>|]/g, '-');
+  telecharger(nom + '.pdf', creerPDF(f).output('blob'), 'application/pdf');
+  toast('PDF enregistré dans les téléchargements');
 }
 
 function imprimerFacture(f) {
@@ -996,8 +1142,9 @@ function majLogo() {
 function telecharger(nom, contenu, type) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([contenu], { type }));
-  a.download = nom; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 function exporterSauvegarde(auto = false) {
   db.derniereSauvegarde = new Date().toISOString();
