@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Factures – Patinage</title>
+<title>Factures</title>
 <meta name="theme-color" content="#2f6fb3">
 <meta name="apple-mobile-web-app-title" content="Factures">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -98,6 +98,8 @@
   #lignes input { padding: 6px 8px; }
   #lignes .c-date { width: 150px; }
   #lignes .c-qte { width: 90px; }
+  #lignes .c-unite { width: 120px; }
+  #lignes select { padding: 6px 8px; }
   #lignes .c-prix { width: 110px; }
   #lignes .c-total { width: 110px; }
   #lignes .c-del { width: 40px; }
@@ -126,6 +128,15 @@
   .banner span { flex: 1; }
   dialog { border: 0; border-radius: var(--radius); padding: 24px; width: min(520px, 92vw); box-shadow: 0 10px 40px rgba(0,0,0,.2); }
   dialog .btn { white-space: normal; }
+  .etape[hidden] { display: none; }
+  [hidden] { display: none !important; }
+  .coche { width: auto; margin: 0; }
+  .cartes-clients { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .cartes-clients:empty { display: none; }
+  .barre-selection { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--accent-soft); color: var(--accent); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+  .aide p, .aide ol, .aide ul { margin: 0 0 10px; }
+  .aide li { margin-bottom: 4px; }
+  .aide > :last-child { margin-bottom: 0; }
   dialog::backdrop { background: rgba(20,30,45,.4); }
   .logo-preview { max-height: 60px; max-width: 200px; display: block; margin-top: 8px; }
 
@@ -148,10 +159,14 @@
   .facture .taxnos { font-size: 11px; color: #666; margin-top: 4px; }
 
   @media print {
-    @page { margin: 16mm; }
+    /* marge de page à 0 : ne laisse pas de place à l'adresse ajoutée par le navigateur */
+    @page { margin: 0; }
     body { background: #fff; }
     header, main, .toast, dialog { display: none !important; }
-    #impression { display: block; }
+    #impression {
+      display: block; padding: 16mm;
+      -webkit-box-decoration-break: clone; box-decoration-break: clone;
+    }
   }
   @media (max-width: 700px) {
     header { height: auto; flex-direction: column; align-items: flex-start; padding: 12px 16px; gap: 8px; }
@@ -164,23 +179,26 @@
 <body>
 
 <header>
-  <h1>⛸️ <span>Factures</span> patinage</h1>
+  <h1>🧾 <span>Factures</span></h1>
   <nav>
-    <button data-view="factures" class="active">Factures</button>
-    <button data-view="edition">Nouvelle facture</button>
-    <button data-view="eleves">Élèves</button>
+    <button data-view="activites" class="active">Activités</button>
+    <button data-view="factures">Factures</button>
+    <button data-view="eleves">Clients</button>
+    <button data-view="depenses">Dépenses</button>
+    <button data-view="finances">Finances</button>
     <button data-view="parametres">Paramètres</button>
+    <button data-view="aide">Aide</button>
   </nav>
 </header>
 
 <main>
   <div class="banner" id="banner-sauvegarde">
-    <span>💾 Pense à faire une copie de sauvegarde de tes données (dernière : <b id="derniere-sauvegarde">jamais</b>).</span>
+    <span>💾 Pensez à faire une copie de sauvegarde de vos données (dernière : <b id="derniere-sauvegarde">jamais</b>).</span>
     <button class="btn small" onclick="exporterSauvegarde()">Sauvegarder maintenant</button>
   </div>
 
   <!-- ===================== FACTURES ===================== -->
-  <section class="view active" id="view-factures">
+  <section class="view" id="view-factures">
     <div class="stats">
       <div class="stat"><div class="lbl">Facturé cette année</div><div class="val" id="st-annee">0 $</div></div>
       <div class="stat"><div class="lbl">En attente de paiement</div><div class="val" id="st-attente">0 $</div></div>
@@ -188,7 +206,7 @@
     </div>
     <div class="card">
       <div class="toolbar">
-        <input class="grow" id="f-recherche" placeholder="Rechercher (élève, numéro…)" oninput="afficherFactures()">
+        <input class="grow" id="f-recherche" placeholder="Rechercher (client, numéro…)" oninput="afficherFactures()">
         <select id="f-statut" onchange="afficherFactures()">
           <option value="">Tous les statuts</option>
           <option value="impayee">Impayées</option>
@@ -197,10 +215,112 @@
         <button class="btn primary" onclick="nouvelleFacture()">+ Nouvelle facture</button>
       </div>
       <table>
-        <thead><tr><th>N°</th><th>Date</th><th>Élève</th><th class="num">Total</th><th>Statut</th><th></th></tr></thead>
+        <thead><tr><th>N°</th><th>Date</th><th>Client</th><th class="num">Total</th><th>Statut</th><th></th></tr></thead>
         <tbody id="liste-factures"></tbody>
       </table>
     </div>
+  </section>
+
+  <!-- ===================== ACTIVITÉS ===================== -->
+  <section class="view" id="view-activites">
+    <div class="card">
+      <h3 id="ac-titre">Ajouter une activité</h3>
+      <div class="row">
+        <label style="flex:0 1 165px">Date<input type="date" id="ac-date"></label>
+        <label>Client<select id="ac-client" onchange="choisirClientActivite()"></select></label>
+        <label style="flex:2 1 240px">Description<input id="ac-desc" list="ac-suggestions" placeholder="Ex. : Séance, Consultation…" oninput="appliquerPrestation()"></label>
+      </div>
+      <datalist id="ac-suggestions"></datalist>
+      <div class="row" style="margin-top:10px">
+        <label style="flex:0 1 110px">Durée / qté<input type="number" step="any" id="ac-qte" value="1"></label>
+        <label style="flex:0 1 130px">Unité<select id="ac-unite"><option value="qte">Quantité</option><option value="h">Heures</option><option value="min">Minutes</option></select></label>
+        <label style="flex:0 1 120px">Prix ($)<input type="number" step="0.01" id="ac-prix"></label>
+        <label style="flex:0 1 150px" id="ac-repeter-bloc">Répéter (semaines)<input type="number" min="1" max="52" id="ac-semaines" value="1"></label>
+        <div class="actions" style="margin:0">
+          <button class="btn primary" id="ac-bouton" onclick="enregistrerActivite()">Ajouter</button>
+          <button class="btn" id="ac-annuler" onclick="annulerActivite()" hidden>Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="cartes-clients" id="ac-a-facturer"></div>
+
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0" class="grow">Activités</h2>
+        <select id="ac-f-client" onchange="afficherActivites()"></select>
+        <select id="ac-f-statut" onchange="afficherActivites()">
+          <option value="afacturer">À facturer</option>
+          <option value="facturee">Facturées</option>
+          <option value="">Toutes</option>
+        </select>
+      </div>
+      <div class="barre-selection" id="ac-selection" hidden></div>
+      <table>
+        <thead><tr><th style="width:32px"><input type="checkbox" class="coche" id="ac-tout" title="Tout sélectionner" onchange="selectionnerTout(this.checked)"></th><th>Date</th><th>Client</th><th>Description</th><th class="num">Durée / qté</th><th class="num">Prix</th><th class="num">Montant</th><th>Statut</th><th></th></tr></thead>
+        <tbody id="liste-activites"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== DÉPENSES ===================== -->
+  <section class="view" id="view-depenses">
+    <div class="card">
+      <h3 id="dp-titre">Ajouter une dépense</h3>
+      <div class="row">
+        <label style="flex:0 1 165px">Date<input type="date" id="dp-date"></label>
+        <label style="flex:2 1 240px">Description<input id="dp-desc" placeholder="Ex. : Essence, Logiciel…"></label>
+        <label>Catégorie<input id="dp-cat" list="dp-categories" placeholder="Choisir ou écrire"></label>
+        <label style="flex:0 1 150px">Montant payé ($)<input type="number" step="0.01" id="dp-montant"></label>
+      </div>
+      <datalist id="dp-categories"></datalist>
+      <div class="row" id="dp-taxes" style="margin-top:10px" hidden>
+        <label style="flex:0 1 130px">TPS payée ($)<input type="number" step="0.01" id="dp-tps"></label>
+        <label style="flex:0 1 130px">TVQ payée ($)<input type="number" step="0.01" id="dp-tvq"></label>
+        <button class="btn" onclick="calculerTaxesDepense()">Calculer depuis le montant</button>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="dp-bouton" onclick="enregistrerDepense()">Ajouter</button>
+        <button class="btn" id="dp-annuler" onclick="annulerDepense()" hidden>Annuler</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0" class="grow">Dépenses</h2>
+        <select id="dp-f-annee" onchange="afficherDepenses()"></select>
+      </div>
+      <table>
+        <thead><tr><th>Date</th><th>Description</th><th>Catégorie</th><th class="num">Taxes</th><th class="num">Montant payé</th><th></th></tr></thead>
+        <tbody id="liste-depenses"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== FINANCES ===================== -->
+  <section class="view" id="view-finances">
+    <div class="toolbar">
+      <h2 style="margin:0" class="grow">Finances</h2>
+      <select id="fin-annee" onchange="afficherFinances()"></select>
+      <button class="btn" onclick="exporterCSV()">Exporter les factures</button>
+      <button class="btn" onclick="exporterDepensesCSV()">Exporter les dépenses</button>
+    </div>
+    <div class="stats" id="fin-stats"></div>
+    <div class="card" id="fin-taxes-carte" hidden>
+      <h3>Taxes de l'année</h3>
+      <table><tbody id="fin-taxes"></tbody></table>
+    </div>
+    <div class="card">
+      <h3>Mois par mois</h3>
+      <table>
+        <thead><tr><th>Mois</th><th class="num">Revenus</th><th class="num">Dépenses</th><th class="num">Bénéfice</th></tr></thead>
+        <tbody id="fin-mois"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Dépenses par catégorie</h3>
+      <table><tbody id="fin-categories"></tbody></table>
+    </div>
+    <p class="hint">Les revenus sont comptés hors taxes, à la date de la facture, même si elle n'est pas encore payée. Avec les taxes activées, les dépenses sont aussi comptées hors taxes. Ces chiffres sont une estimation et ne remplacent pas votre comptable.</p>
   </section>
 
   <!-- ===================== ÉDITION ===================== -->
@@ -208,7 +328,7 @@
     <h2 id="titre-edition">Nouvelle facture</h2>
     <div class="card">
       <div class="row">
-        <label>Élève
+        <label>Client
           <select id="e-eleve" onchange="choisirEleve()"></select>
         </label>
         <label style="flex:0 1 180px">Numéro
@@ -222,22 +342,24 @@
         </label>
       </div>
       <p class="hint" id="e-eleve-hint"></p>
+      <div id="e-activites" style="margin-top:8px"></div>
     </div>
 
     <div class="card">
-      <h3>Cours et frais</h3>
+      <h3>Services et frais</h3>
       <table id="lignes">
         <thead><tr>
           <th class="c-date">Date</th><th>Description</th>
-          <th class="c-qte num">Qté / h</th><th class="c-prix num">Prix</th><th class="c-total num">Montant</th><th class="c-del"></th>
+          <th class="c-qte num">Durée / qté</th><th class="c-unite">Unité</th><th class="c-prix num">Prix</th><th class="c-total num">Montant</th><th class="c-del"></th>
         </tr></thead>
         <tbody id="e-lignes"></tbody>
       </table>
       <div class="actions" style="margin-top:10px">
         <button class="btn small" onclick="ajouterLigne()">+ Ajouter une ligne</button>
-        <button class="btn small" onclick="ouvrirSerie()">+ Plusieurs cours d'un coup</button>
+        <button class="btn small" onclick="ouvrirSerie()">+ Plusieurs séances d'un coup</button>
       </div>
       <div class="chips" id="e-chips"></div>
+      <p class="hint">Avec les heures ou les minutes, le prix est votre tarif à l'heure : 30 minutes à 60 $ donnent 30 $.</p>
 
       <div class="totaux" id="e-totaux"></div>
     </div>
@@ -245,7 +367,7 @@
     <div class="card">
       <div class="row">
         <label>Note sur la facture (optionnel)
-          <textarea id="e-notes" placeholder="Ex. : Merci ! Session d'automne."></textarea>
+          <textarea id="e-notes" placeholder="Ex. : Merci de votre confiance !"></textarea>
         </label>
       </div>
       <div class="row" style="margin-top:12px">
@@ -262,15 +384,15 @@
     </div>
   </section>
 
-  <!-- ===================== ÉLÈVES ===================== -->
+  <!-- ===================== CLIENTS ===================== -->
   <section class="view" id="view-eleves">
     <div class="card">
       <div class="toolbar">
-        <h2 style="margin:0" class="grow">Élèves</h2>
-        <button class="btn primary" onclick="editerEleve()">+ Ajouter un élève</button>
+        <h2 style="margin:0" class="grow">Clients</h2>
+        <button class="btn primary" onclick="editerEleve()">+ Ajouter un client</button>
       </div>
       <table>
-        <thead><tr><th>Élève</th><th>Parent / à facturer à</th><th>Courriel</th><th class="num">Tarif</th><th class="num">Solde dû</th><th></th></tr></thead>
+        <thead><tr><th>Client</th><th>Facturer à</th><th>Courriel</th><th class="num">Tarif</th><th class="num">Solde dû</th><th></th></tr></thead>
         <tbody id="liste-eleves"></tbody>
       </table>
     </div>
@@ -280,10 +402,10 @@
   <section class="view" id="view-parametres">
     <h2>Paramètres</h2>
     <div class="card">
-      <h3>Tes informations (en haut de la facture)</h3>
+      <h3>Vos informations (en haut de la facture)</h3>
       <div class="row">
-        <label>Ton nom<input id="p-nom" placeholder="Prénom Nom"></label>
-        <label>Nom d'entreprise / titre (optionnel)<input id="p-entreprise" placeholder="Entraîneuse de patinage artistique"></label>
+        <label>Votre nom<input id="p-nom" placeholder="Prénom Nom"></label>
+        <label>Entreprise ou métier (optionnel)<input id="p-entreprise" placeholder="Ex. : Graphisme, Rénovation…"></label>
       </div>
       <div class="row" style="margin-top:12px">
         <label>Adresse<textarea id="p-adresse" placeholder="123 rue Exemple&#10;Ville (Québec) A1A 1A1"></textarea></label>
@@ -302,19 +424,19 @@
     <div class="card">
       <h3>Facturation</h3>
       <div class="row">
-        <label>Tarif horaire par défaut ($)<input type="number" step="0.01" id="p-tarif"></label>
+        <label>Tarif par défaut ($)<input type="number" step="0.01" id="p-tarif"></label>
         <label>Préfixe des numéros<input id="p-prefixe" placeholder="2026-"></label>
         <label>Prochain numéro<input type="number" id="p-prochain"></label>
         <label>Délai de paiement (jours)<input type="number" id="p-delai"></label>
       </div>
       <div class="row" style="margin-top:12px">
-        <label>Instructions de paiement (bas de la facture)<textarea id="p-paiement" placeholder="Paiement par virement Interac à : courriel@exemple.com"></textarea></label>
+        <label>Instructions de paiement (bas de la facture)<textarea id="p-paiement" placeholder="Ex. : Paiement par virement Interac à courriel@exemple.com"></textarea></label>
       </div>
     </div>
 
     <div class="card">
       <h3>Taxes</h3>
-      <p class="hint" style="margin:0 0 12px">Au Québec, si tes revenus sont sous 30 000 $ par année, tu es « petit fournisseur » et tu n'as pas à charger les taxes. Coche seulement si tu es inscrite.</p>
+      <p class="hint" style="margin:0 0 12px">Les taxes sont prévues pour le Québec (TPS et TVQ) ; vérifiez que les taux sont à jour. Pour savoir si vous devez les percevoir, consultez <a href="https://www.revenuquebec.ca/" target="_blank" rel="noopener">Revenu Québec</a>. Cet outil ne remplace pas un conseil fiscal.</p>
       <label class="check"><input type="checkbox" id="p-taxes"> Charger les taxes par défaut</label>
       <div class="row" style="margin-top:12px">
         <label>Taux TPS (%)<input type="number" step="0.001" id="p-tps-taux"></label>
@@ -325,10 +447,10 @@
     </div>
 
     <div class="card">
-      <h3>Boutons rapides (types de cours et frais)</h3>
-      <p class="hint" style="margin:0 0 12px">Ils apparaissent sous la liste des lignes pour ajouter un cours en un clic. Laisse le prix vide pour utiliser le tarif de l'élève.</p>
+      <h3>Boutons rapides (services et frais)</h3>
+      <p class="hint" style="margin:0 0 12px">Ils apparaissent sous la liste des lignes pour ajouter un service en un clic. Laissez le prix vide pour utiliser le tarif du client.</p>
       <table>
-        <thead><tr><th>Description</th><th class="num" style="width:120px">Qté / h</th><th class="num" style="width:140px">Prix</th><th style="width:40px"></th></tr></thead>
+        <thead><tr><th>Description</th><th class="num" style="width:120px">Durée / qté</th><th style="width:130px">Unité</th><th class="num" style="width:140px">Prix</th><th style="width:40px"></th></tr></thead>
         <tbody id="p-prestations"></tbody>
       </table>
       <button class="btn small" style="margin-top:8px" onclick="ajouterPrestation()">+ Ajouter</button>
@@ -340,7 +462,7 @@
 
     <div class="card" style="margin-top:28px">
       <h3>Sauvegarde des données</h3>
-      <p class="hint" style="margin:0 0 12px">Les données sont gardées dans ce navigateur, sur cet ordinateur. Fais une sauvegarde de temps en temps (clé USB, Google Drive…) pour ne rien perdre, ou pour les transférer sur un autre ordinateur.</p>
+      <p class="hint" style="margin:0 0 12px">Les données sont gardées dans ce navigateur, sur cet ordinateur. Gardez vos sauvegardes dans un endroit sûr (clé USB, iCloud, Google Drive…) pour ne rien perdre, ou pour transférer vos données sur un autre ordinateur.</p>
       <div class="actions">
         <button class="btn" onclick="exporterSauvegarde()">💾 Télécharger une sauvegarde</button>
         <button class="btn" onclick="document.getElementById('import-fichier').click()">📂 Restaurer une sauvegarde</button>
@@ -349,39 +471,84 @@
       </div>
     </div>
   </section>
+
+  <!-- ===================== AIDE ===================== -->
+  <section class="view" id="view-aide">
+    <h2>Aide</h2>
+    <div class="card aide">
+      <h3>Comment faire une facture</h3>
+      <ol>
+        <li>Notez vos cours, séances et services dans <b>Activités</b>, au fil du temps. Chacun peut se compter en quantité, en heures ou en minutes.</li>
+        <li>Quand c'est le moment de facturer, cliquez sur <b>Créer la facture</b> pour regrouper tout ce qui reste à facturer à ce client, ou cochez seulement certaines activités.</li>
+        <li>Cliquez sur <b>Enregistrer et télécharger le PDF</b>, puis envoyez le fichier à votre client.</li>
+        <li>Quand le client a payé, cliquez sur <b>✓ Payée</b> dans la liste des factures.</li>
+      </ol>
+    </div>
+    <div class="card aide">
+      <h3>Suivre ses finances</h3>
+      <p>Notez vos achats d'entreprise dans <b>Dépenses</b>. L'onglet <b>Finances</b> calcule vos revenus, vos dépenses et votre bénéfice estimé, par mois et par catégorie. Vous pouvez aussi les exporter pour votre comptable.</p>
+    </div>
+    <div class="card aide">
+      <h3>Où sont mes données ?</h3>
+      <p>Vos clients, vos factures et vos dépenses restent <b>uniquement sur cet appareil</b>, dans ce navigateur. Rien n'est envoyé sur Internet.</p>
+      <p><b>Conséquence importante :</b> si l'appareil brise ou si les données du navigateur sont effacées, tout est perdu sans sauvegarde.</p>
+    </div>
+    <div class="card aide">
+      <h3>Les sauvegardes</h3>
+      <p>Un fichier de sauvegarde est téléchargé automatiquement environ une fois par mois, quand vous enregistrez une facture. Vous pouvez aussi en faire un à tout moment dans <b>Paramètres</b>.</p>
+      <p>Gardez ces fichiers dans un endroit sûr (iCloud, Google Drive, clé USB). Pour tout récupérer, y compris sur un nouvel appareil : <b>Paramètres → Restaurer une sauvegarde</b>.</p>
+      <p>Le navigateur peut demander d'autoriser les téléchargements la première fois. Acceptez, sinon les PDF et les sauvegardes ne seront pas enregistrés.</p>
+    </div>
+    <div class="card aide">
+      <h3>Installer l'outil comme une application</h3>
+      <p>Installez-le une seule fois, puis ouvrez-le toujours de la même façon : chaque navigateur et chaque application installée garde ses propres données.</p>
+      <ul>
+        <li><b>Mac (Safari)</b> : menu <b>Fichier → Ajouter au Dock</b> (macOS Sonoma ou plus récent).</li>
+        <li><b>Windows, Mac ou Linux (Chrome, Edge)</b> : cherchez l'option <b>Installer</b> dans le menu du navigateur.</li>
+        <li><b>iPhone ou iPad (Safari)</b> : bouton <b>Partager → Sur l'écran d'accueil</b>.</li>
+        <li><b>Android (Chrome)</b> : menu <b>⋮ → Ajouter à l'écran d'accueil</b>.</li>
+      </ul>
+      <p>Si vous aviez déjà des données dans le navigateur, faites une sauvegarde avant d'installer, puis restaurez-la dans l'application.</p>
+    </div>
+    <div class="card aide">
+      <h3>Choisir où vont les fichiers</h3>
+      <p>Le dossier est choisi par le navigateur, pas par l'outil. Cherchez <b>Téléchargements</b> dans les réglages de votre navigateur pour le changer.</p>
+    </div>
+  </section>
 </main>
 
 <!-- Facture prête à imprimer -->
 <div id="impression"></div>
 
-<!-- Dialogue élève -->
+<!-- Dialogue client -->
 <dialog id="dlg-eleve">
-  <h2 id="dlg-eleve-titre">Élève</h2>
-  <div class="row"><label>Nom de l'élève *<input id="d-nom"></label></div>
-  <div class="row" style="margin-top:10px"><label>Parent / personne à facturer<input id="d-parent" placeholder="Si différent de l'élève"></label></div>
+  <h2 id="dlg-eleve-titre">Client</h2>
+  <div class="row"><label>Nom du client *<input id="d-nom"></label></div>
+  <div class="row" style="margin-top:10px"><label>Facturer à<input id="d-parent" placeholder="Si différent du client (parent, entreprise…)"></label></div>
   <div class="row" style="margin-top:10px">
     <label>Courriel<input id="d-courriel"></label>
     <label>Téléphone<input id="d-tel"></label>
   </div>
   <div class="row" style="margin-top:10px"><label>Adresse<textarea id="d-adresse"></textarea></label></div>
-  <div class="row" style="margin-top:10px"><label>Tarif horaire ($)<input type="number" step="0.01" id="d-tarif" placeholder="Tarif par défaut"></label></div>
+  <div class="row" style="margin-top:10px"><label>Tarif ($)<input type="number" step="0.01" id="d-tarif" placeholder="Tarif par défaut"></label></div>
   <div class="actions">
     <button class="btn primary" onclick="enregistrerEleve()">Enregistrer</button>
     <button class="btn" onclick="document.getElementById('dlg-eleve').close()">Annuler</button>
   </div>
 </dialog>
 
-<!-- Dialogue série de cours -->
+<!-- Dialogue série de séances -->
 <dialog id="dlg-serie">
-  <h2>Ajouter plusieurs cours</h2>
-  <p class="hint" style="margin-top:-8px">Pratique pour facturer un mois complet : un cours par semaine, le même jour.</p>
-  <div class="row"><label>Description<input id="s-desc" value="Cours privé"></label></div>
+  <h2>Ajouter plusieurs séances</h2>
+  <p class="hint" style="margin-top:-8px">Pratique pour facturer un mois complet : une séance par semaine, le même jour.</p>
+  <div class="row"><label>Description<input id="s-desc" value="Service"></label></div>
   <div class="row" style="margin-top:10px">
-    <label>Premier cours<input type="date" id="s-debut"></label>
+    <label>Première séance<input type="date" id="s-debut"></label>
     <label>Nombre de semaines<input type="number" id="s-nb" value="4" min="1" max="52"></label>
   </div>
   <div class="row" style="margin-top:10px">
-    <label>Durée (h)<input type="number" step="0.25" id="s-qte" value="1"></label>
+    <label>Durée / qté<input type="number" step="any" id="s-qte" value="1"></label>
+    <label>Unité<select id="s-unite"><option value="qte">Quantité</option><option value="h">Heures</option><option value="min">Minutes</option></select></label>
     <label>Prix ($)<input type="number" step="0.01" id="s-prix"></label>
   </div>
   <div class="actions">
@@ -393,11 +560,48 @@
 <!-- Dialogue rappel de sauvegarde -->
 <dialog id="dlg-rappel">
   <h2>💾 C'est le moment de faire une sauvegarde</h2>
-  <p><span id="rappel-derniere"></span> Une sauvegarde par mois permet de ne jamais perdre tes élèves et tes factures, même si l'ordinateur brise.</p>
-  <p class="hint">Garde le fichier téléchargé dans iCloud Drive ou sur une clé USB.</p>
+  <p><span id="rappel-derniere"></span> Une sauvegarde par mois permet de ne pas perdre vos clients, vos factures et vos dépenses, même si l'ordinateur brise.</p>
+  <p class="hint">Gardez le fichier téléchargé dans iCloud Drive ou sur une clé USB.</p>
   <div class="actions">
     <button class="btn primary" onclick="sauvegarderDepuisRappel()">Sauvegarder maintenant</button>
     <button class="btn" onclick="reporterRappel()">Me le rappeler dans 3 jours</button>
+  </div>
+</dialog>
+
+<!-- Guide de démarrage -->
+<dialog id="dlg-accueil">
+  <div class="etape" id="accueil-1">
+    <p class="hint">Étape 1 sur 3</p>
+    <h2>Bienvenue ! Qui envoie les factures ?</h2>
+    <p class="hint" style="margin:-8px 0 12px">Ces informations apparaîtront en haut de vos factures. Elles restent sur cet appareil.</p>
+    <div class="row"><label>Votre nom ou entreprise *<input id="a-nom"></label></div>
+    <div class="row" style="margin-top:10px">
+      <label>Courriel<input id="a-courriel"></label>
+      <label>Téléphone<input id="a-tel"></label>
+    </div>
+    <div class="actions">
+      <button class="btn primary" onclick="accueilInfos()">Continuer</button>
+      <button class="btn link" onclick="document.getElementById('import-fichier').click()">J'ai déjà une sauvegarde</button>
+    </div>
+  </div>
+  <div class="etape" id="accueil-2" hidden>
+    <p class="hint">Étape 2 sur 3</p>
+    <h2>Ajoutez un premier client</h2>
+    <div class="row"><label>Nom du client<input id="a-client"></label></div>
+    <div class="row" style="margin-top:10px"><label>Courriel (optionnel)<input id="a-client-courriel"></label></div>
+    <div class="actions">
+      <button class="btn primary" onclick="accueilClient()">Continuer</button>
+      <button class="btn" onclick="accueilEtape(3)">Plus tard</button>
+    </div>
+  </div>
+  <div class="etape" id="accueil-3" hidden>
+    <p class="hint">Étape 3 sur 3</p>
+    <h2>C'est prêt !</h2>
+    <p>Notez vos activités au fil du temps, puis regroupez-les dans une facture. Votre adresse, vos taxes et votre logo s'ajoutent dans <b>Paramètres</b>, et l'onglet <b>Aide</b> explique le reste.</p>
+    <div class="actions">
+      <button class="btn primary" onclick="accueilFin(true)">Ajouter ma première activité</button>
+      <button class="btn" onclick="accueilFin(false)">Plus tard</button>
+    </div>
   </div>
 </dialog>
 
@@ -408,26 +612,26 @@
 // ===================================================================
 // Données
 // ===================================================================
-const CLE = 'factures-patinage-v1';
+const CLE = 'factures-patinage-v1'; // ne pas renommer : les données existantes sont sous cette clé
 const annee = new Date().getFullYear();
 
 const DEFAUT = {
   parametres: {
-    nom: '', entreprise: 'Entraîneuse de patinage artistique', adresse: '', tel: '', courriel: '', logo: '',
-    tarif: 60, prefixe: annee + '-', prochain: 1, delai: 14,
-    paiement: 'Paiement par virement Interac ou en argent comptant.\nMerci !',
+    nom: '', entreprise: '', adresse: '', tel: '', courriel: '', logo: '',
+    tarif: 0, prefixe: annee + '-', prochain: 1, delai: 14,
+    paiement: '',
     taxes: false, tpsTaux: 5, tpsNo: '', tvqTaux: 9.975, tvqNo: '',
     prestations: [
-      { desc: 'Cours privé', qte: 1, prix: '' },
-      { desc: 'Cours privé (30 min)', qte: 0.5, prix: '' },
-      { desc: 'Cours semi-privé', qte: 1, prix: '' },
-      { desc: 'Accompagnement en compétition', qte: 1, prix: '' },
-      { desc: 'Chorégraphie', qte: 1, prix: '' },
-      { desc: 'Frais de glace', qte: 1, prix: '' },
+      { desc: 'Service', qte: 1, prix: '' },
+      { desc: 'Consultation', qte: 1, prix: '' },
+      { desc: 'Déplacement', qte: 1, prix: '' },
+      { desc: 'Matériel', qte: 1, prix: '' },
     ],
   },
   eleves: [],
   factures: [],
+  activites: [],
+  depenses: [],
   derniereSauvegarde: null,
 };
 
@@ -482,9 +686,23 @@ function toast(msg) {
 }
 const eleveParId = id => db.eleves.find(e => e.id === id);
 
+// Unité d'une ligne : quantité (défaut), heures ou minutes. Le prix est alors un tarif à l'heure.
+const UNITES = [['qte', 'Quantité'], ['h', 'Heures'], ['min', 'Minutes']];
+const optionsUnite = u => UNITES.map(([v, t]) => `<option value="${v}"${(u || 'qte') === v ? ' selected' : ''}>${t}</option>`).join('');
+function montantLigne(l) {
+  const m = (Number(l.qte) || 0) * (Number(l.prix) || 0) / (l.unite === 'min' ? 60 : 1);
+  // les anciennes lignes (sans unité) gardent leur calcul pour que leur total ne change pas
+  return l.unite ? arrondi(m) : m;
+}
+function texteQte(l) {
+  const q = String(l.qte).replace('.', ',');
+  return l.unite === 'h' ? q + ' h' : l.unite === 'min' ? q + ' min' : q;
+}
+const textePrix = l => argent(l.prix) + (l.unite === 'h' || l.unite === 'min' ? ' / h' : '');
+
 function calculer(f) {
   const p = db.parametres;
-  const sousTotal = arrondi(f.lignes.reduce((s, l) => s + (Number(l.qte) || 0) * (Number(l.prix) || 0), 0));
+  const sousTotal = arrondi(f.lignes.reduce((s, l) => s + montantLigne(l), 0));
   const tps = f.taxes ? arrondi(sousTotal * (f.tpsTaux ?? p.tpsTaux) / 100) : 0;
   const tvq = f.taxes ? arrondi(sousTotal * (f.tvqTaux ?? p.tvqTaux) / 100) : 0;
   return { sousTotal, tps, tvq, total: arrondi(sousTotal + tps + tvq) };
@@ -495,10 +713,13 @@ function calculer(f) {
 // ===================================================================
 function montrer(vue) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + vue));
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === vue));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === (vue === 'edition' ? 'factures' : vue)));
   if (vue === 'factures') afficherFactures();
   if (vue === 'eleves') afficherEleves();
   if (vue === 'parametres') afficherParametres();
+  if (vue === 'activites') afficherActivites();
+  if (vue === 'depenses') afficherDepenses();
+  if (vue === 'finances') afficherFinances();
   window.scrollTo(0, 0);
 }
 document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
@@ -519,8 +740,8 @@ function afficherFactures() {
   const tb = $('liste-factures');
   if (!db.factures.length) {
     tb.innerHTML = `<tr><td colspan="6" class="empty">Aucune facture pour l'instant.<br><br>
-      ${db.eleves.length ? '' : 'Commence par ajouter tes élèves dans l\'onglet <b>Élèves</b>, puis '}
-      clique sur <b>+ Nouvelle facture</b>.</td></tr>`;
+      ${db.eleves.length ? '' : 'Ajoutez vos clients dans l\'onglet <b>Clients</b>, puis '}
+      cliquez sur <b>+ Nouvelle facture</b>.</td></tr>`;
   } else if (!liste.length) {
     tb.innerHTML = `<tr><td colspan="6" class="empty">Aucune facture ne correspond.</td></tr>`;
   } else {
@@ -558,7 +779,10 @@ function basculerPayee(id) {
 }
 function supprimerFacture(id) {
   const f = db.factures.find(x => x.id === id);
-  if (!confirm(`Supprimer la facture ${f.no} (${f.client.nom}) ?\nCette action est définitive.`)) return;
+  const liees = db.activites.filter(a => a.factureId === id);
+  if (!confirm(`Supprimer la facture ${f.no} (${f.client.nom}) ?\nCette action est définitive.` +
+    (liees.length ? `\n${liees.length} activité(s) redeviendront « à facturer ».` : ''))) return;
+  liees.forEach(a => { a.factureId = null; });
   db.factures = db.factures.filter(x => x.id !== id);
   sauver(); afficherFactures(); toast('Facture supprimée');
 }
@@ -567,11 +791,11 @@ function dupliquer(id) {
   nouvelleFacture();
   $('e-eleve').value = src.eleveId && eleveParId(src.eleveId) ? src.eleveId : '';
   choisirEleve(false);
-  lignesEdition = src.lignes.map(l => ({ ...l, date: '' }));
+  lignesEdition = src.lignes.map(({ activiteId, ...l }) => ({ ...l, date: '' }));
   $('e-notes').value = src.notes || '';
   $('e-taxes').checked = !!src.taxes;
   dessinerLignes();
-  toast('Copie créée — ajuste les dates des cours');
+  toast('Copie créée — ajustez les dates');
 }
 
 // ===================================================================
@@ -582,9 +806,9 @@ let lignesEdition = [];
 function remplirSelectEleves() {
   const s = $('e-eleve');
   const tri = [...db.eleves].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
-  s.innerHTML = `<option value="">— Choisir un élève —</option>` +
+  s.innerHTML = `<option value="">— Choisir un client —</option>` +
     tri.map(e => `<option value="${e.id}">${esc(e.nom)}${e.parent ? ' (' + esc(e.parent) + ')' : ''}</option>`).join('') +
-    `<option value="__nouveau">+ Nouvel élève…</option>`;
+    `<option value="__nouveau">+ Nouveau client…</option>`;
 }
 
 function prochainNumero() {
@@ -633,24 +857,22 @@ function editerFacture(id) {
   montrer('edition');
 }
 
-function tarifEleve() {
-  const e = eleveParId($('e-eleve').value);
-  return e && e.tarif !== '' && e.tarif != null ? Number(e.tarif) : Number(db.parametres.tarif) || 0;
-}
+function tarifEleve() { return tarifClient($('e-eleve').value); }
 
 function choisirEleve(ajouterSiVide = true) {
   const v = $('e-eleve').value;
   if (v === '__nouveau') { $('e-eleve').value = ''; editerEleve(null, true); return; }
   const e = eleveParId(v);
   $('e-eleve-hint').textContent = e
-    ? [e.parent && 'Facturé à : ' + e.parent, e.courriel, 'Tarif : ' + argent(tarifEleve()) + ' / h'].filter(Boolean).join(' · ')
+    ? [e.parent && 'Facturé à : ' + e.parent, e.courriel, tarifEleve() && 'Tarif : ' + argent(tarifEleve())].filter(Boolean).join(' · ')
     : '';
-  if (e && ajouterSiVide && !lignesEdition.length) ajouterLigne();
+  if (e && ajouterSiVide && !lignesEdition.length && !activitesAFacturer(e.id).length) ajouterLigne();
+  majSuggestionActivites();
   dessinerChips();
 }
 
-function ajouterLigne(desc = 'Cours privé', qte = 1, prix = null, date = null) {
-  lignesEdition.push({ date: date ?? aujourdhui(), desc, qte, prix: prix ?? tarifEleve() });
+function ajouterLigne(desc = db.parametres.prestations[0]?.desc || '', qte = 1, prix = null, date = null, unite = db.parametres.prestations[0]?.unite || 'qte') {
+  lignesEdition.push({ date: date ?? aujourdhui(), desc, qte, prix: prix ?? tarifEleve(), unite });
   dessinerLignes();
   const champs = document.querySelectorAll('#e-lignes tr:last-child input');
   if (champs[0] && date === null) champs[0].focus();
@@ -659,26 +881,36 @@ function ajouterLigne(desc = 'Cours privé', qte = 1, prix = null, date = null) 
 function dessinerLignes() {
   const tb = $('e-lignes');
   if (!lignesEdition.length) {
-    tb.innerHTML = `<tr><td colspan="6" class="empty" style="padding:16px">Aucune ligne. Utilise les boutons ci-dessous pour ajouter des cours.</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="7" class="empty" style="padding:16px">Aucune ligne. Utilisez les boutons ci-dessous pour ajouter des services.</td></tr>`;
   } else {
     tb.innerHTML = lignesEdition.map((l, i) => `
       <tr>
         <td><input type="date" value="${esc(l.date)}" oninput="majLigne(${i},'date',this.value)"></td>
         <td><input value="${esc(l.desc)}" oninput="majLigne(${i},'desc',this.value)"></td>
-        <td><input type="number" step="0.25" class="num" style="text-align:right" value="${esc(l.qte)}" oninput="majLigne(${i},'qte',this.value)"></td>
+        <td><input type="number" step="${l.unite === 'min' ? 5 : l.unite === 'h' ? 0.25 : 1}" class="num" style="text-align:right" value="${esc(l.qte)}" oninput="majLigne(${i},'qte',this.value)"></td>
+        <td><select onchange="changerUnite(${i},this.value)">${optionsUnite(l.unite)}</select></td>
         <td><input type="number" step="0.01" style="text-align:right" value="${esc(l.prix)}" oninput="majLigne(${i},'prix',this.value)"></td>
-        <td class="num" id="mt-${i}">${argent((Number(l.qte) || 0) * (Number(l.prix) || 0))}</td>
+        <td class="num" id="mt-${i}">${argent(montantLigne(l))}</td>
         <td><button class="btn small link" style="color:var(--danger)" title="Retirer" onclick="retirerLigne(${i})">✕</button></td>
       </tr>`).join('');
   }
   majTotaux();
+  majSuggestionActivites();
 }
 function majLigne(i, champ, val) {
   lignesEdition[i][champ] = val;
   const l = lignesEdition[i];
   const cell = $('mt-' + i);
-  if (cell) cell.textContent = argent((Number(l.qte) || 0) * (Number(l.prix) || 0));
+  if (cell) cell.textContent = argent(montantLigne(l));
   majTotaux();
+}
+// Passer des heures aux minutes (ou l'inverse) convertit la durée : le montant ne change pas
+function changerUnite(i, unite) {
+  const l = lignesEdition[i], q = Number(l.qte) || 0;
+  if (l.unite === 'h' && unite === 'min') l.qte = arrondi(q * 60);
+  if (l.unite === 'min' && unite === 'h') l.qte = arrondi(q / 60);
+  l.unite = unite;
+  dessinerLignes();
 }
 function retirerLigne(i) { lignesEdition.splice(i, 1); dessinerLignes(); }
 
@@ -689,9 +921,9 @@ function dessinerChips() {
 function ajouterPrestationLigne(i) {
   const p = db.parametres.prestations[i];
   const qte = Number(p.qte) || 1;
-  // prix vide = tarif horaire de l'élève
+  // prix vide = tarif du client
   const prix = p.prix === '' || p.prix == null ? tarifEleve() : Number(p.prix);
-  ajouterLigne(p.desc, qte, prix);
+  ajouterLigne(p.desc, qte, prix, null, p.unite || 'qte');
 }
 
 function majTotaux() {
@@ -705,7 +937,7 @@ function majTotaux() {
     <div class="grand"><span>Total</span><span>${argent(t.total)}</span></div>`;
 }
 
-// Série de cours hebdomadaires
+// Série de séances hebdomadaires
 function ouvrirSerie() {
   $('s-debut').value = aujourdhui();
   $('s-prix').value = tarifEleve();
@@ -716,12 +948,12 @@ function ajouterSerie() {
   for (let k = 0; k < n; k++) {
     lignesEdition.push({
       date: ajouterJours($('s-debut').value || aujourdhui(), 7 * k),
-      desc: $('s-desc').value, qte: Number($('s-qte').value) || 1, prix: Number($('s-prix').value) || 0,
+      desc: $('s-desc').value, qte: Number($('s-qte').value) || 1, prix: Number($('s-prix').value) || 0, unite: $('s-unite').value,
     });
   }
   $('dlg-serie').close();
   dessinerLignes();
-  toast(n + ' cours ajoutés');
+  toast(n + ' séances ajoutées');
 }
 
 function lireFormulaire() {
@@ -739,7 +971,7 @@ function lireFormulaire() {
     date: $('e-date').value,
     echeance: $('e-echeance').value,
     lignes: lignesEdition.filter(l => l.desc || Number(l.prix)).map(l => ({
-      date: l.date, desc: l.desc, qte: Number(l.qte) || 0, prix: Number(l.prix) || 0,
+      date: l.date, desc: l.desc, qte: Number(l.qte) || 0, prix: Number(l.prix) || 0, ...(l.unite ? { unite: l.unite } : {}), ...(l.activiteId ? { activiteId: l.activiteId } : {}),
     })),
     notes: $('e-notes').value,
     taxes: $('e-taxes').checked,
@@ -752,9 +984,9 @@ function lireFormulaire() {
 
 function enregistrerFacture(etPdf) {
   const f = lireFormulaire();
-  if (!f.client.nom) { alert('Choisis un élève.'); $('e-eleve').focus(); return; }
-  if (!f.no) { alert('Indique un numéro de facture.'); return; }
-  if (!f.lignes.length) { alert('Ajoute au moins une ligne à la facture.'); return; }
+  if (!f.client.nom) { alert('Choisissez un client.'); $('e-eleve').focus(); return; }
+  if (!f.no) { alert('Indiquez un numéro de facture.'); return; }
+  if (!f.lignes.length) { alert('Ajoutez au moins une ligne à la facture.'); return; }
   if (db.factures.some(x => x.no === f.no && x.id !== f.id)) {
     alert(`Le numéro ${f.no} est déjà utilisé par une autre facture.`); return;
   }
@@ -769,6 +1001,7 @@ function enregistrerFacture(etPdf) {
       if (n >= Number(p.prochain)) p.prochain = n + 1;
     }
   }
+  lierActivites(f);
   sauver();
   montrer('factures');
   if (etPdf) {
@@ -782,7 +1015,7 @@ function enregistrerFacture(etPdf) {
 
 function apercu() {
   const f = lireFormulaire();
-  if (!f.client.nom) { alert('Choisis un élève.'); return; }
+  if (!f.client.nom) { alert('Choisissez un client.'); return; }
   imprimerFacture(f);
 }
 
@@ -800,7 +1033,7 @@ function htmlFacture(f) {
     <div class="tete">
       <div class="emetteur">
         ${p.logo ? `<img src="${p.logo}" alt=""><br>` : ''}
-        <strong>${esc(p.nom || 'Ton nom')}</strong><br>
+        <strong>${esc(p.nom)}</strong><br>
         ${p.entreprise ? esc(p.entreprise) + '<br>' : ''}
         ${p.adresse ? nl2br(p.adresse) + '<br>' : ''}
         ${[p.tel, p.courriel].filter(Boolean).map(esc).join(' · ')}
@@ -832,9 +1065,9 @@ function htmlFacture(f) {
           <tr>
             <td>${l.date ? dateCourte(l.date) : ''}</td>
             <td>${esc(l.desc)}</td>
-            <td class="num">${String(l.qte).replace('.', ',')}</td>
-            <td class="num">${argent(l.prix)}</td>
-            <td class="num">${argent(l.qte * l.prix)}</td>
+            <td class="num">${texteQte(l)}</td>
+            <td class="num">${textePrix(l)}</td>
+            <td class="num">${argent(montantLigne(l))}</td>
           </tr>`).join('')}
       </tbody>
     </table>
@@ -892,7 +1125,7 @@ function creerPDF(f) {
     doc.addImage(p.logo, 'PNG', G, y, l * r, h * r);
     y += h * r + 6;
   } else y += 4;
-  police('bold', 13); ecrire(p.nom || 'Ton nom', G, y); y += 6;
+  police('bold', 13); ecrire(p.nom, G, y); y += 6;
   police('normal', 10);
   if (p.entreprise) y = bloc(p.entreprise, G, y, 95);
   if (p.adresse) y = bloc(p.adresse, G, y, 95);
@@ -945,9 +1178,9 @@ function creerPDF(f) {
     if (y + desc.length * LH > BAS) { doc.addPage(); y = G; entete(); police('normal', 10); }
     ecrire(l.date ? dateCourte(l.date) : '', G, y);
     desc.forEach((d, i) => doc.text(d, X_DESC, y + i * LH));
-    ecrire(String(l.qte).replace('.', ','), X_QTE, y, { align: 'right' });
-    ecrire(argent(l.prix), X_PRIX, y, { align: 'right' });
-    ecrire(argent(l.qte * l.prix), D, y, { align: 'right' });
+    ecrire(texteQte(l), X_QTE, y, { align: 'right' });
+    ecrire(textePrix(l), X_PRIX, y, { align: 'right' });
+    ecrire(argent(montantLigne(l)), D, y, { align: 'right' });
     y += desc.length * LH;
     doc.setDrawColor(220); doc.setLineWidth(0.2); doc.line(G, y - 2.5, D, y - 2.5);
     y += 2;
@@ -1002,15 +1235,15 @@ function imprimerFacture(f) {
 }
 
 // ===================================================================
-// Élèves
+// Clients
 // ===================================================================
-let eleveEnCours = null, retourVersFacture = false;
+let eleveEnCours = null, retourVersFacture = false, retourVersActivite = false;
 
 function afficherEleves() {
   const tb = $('liste-eleves');
   const tri = [...db.eleves].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
   if (!tri.length) {
-    tb.innerHTML = `<tr><td colspan="6" class="empty">Aucun élève. Clique sur <b>+ Ajouter un élève</b>.</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="6" class="empty">Aucun client. Cliquez sur <b>+ Ajouter un client</b>.</td></tr>`;
     return;
   }
   tb.innerHTML = tri.map(e => {
@@ -1031,9 +1264,9 @@ function afficherEleves() {
 }
 
 function editerEleve(id = null, depuisFacture = false) {
-  eleveEnCours = id; retourVersFacture = depuisFacture;
+  eleveEnCours = id; retourVersFacture = depuisFacture; retourVersActivite = false;
   const e = id ? eleveParId(id) : {};
-  $('dlg-eleve-titre').textContent = id ? 'Modifier l\'élève' : 'Nouvel élève';
+  $('dlg-eleve-titre').textContent = id ? 'Modifier le client' : 'Nouveau client';
   $('d-nom').value = e.nom || '';
   $('d-parent').value = e.parent || '';
   $('d-courriel').value = e.courriel || '';
@@ -1045,7 +1278,7 @@ function editerEleve(id = null, depuisFacture = false) {
 }
 function enregistrerEleve() {
   const nom = $('d-nom').value.trim();
-  if (!nom) { alert("Indique le nom de l'élève."); return; }
+  if (!nom) { alert("Indiquez le nom du client."); return; }
   const data = {
     nom, parent: $('d-parent').value.trim(), courriel: $('d-courriel').value.trim(),
     tel: $('d-tel').value.trim(), adresse: $('d-adresse').value.trim(), tarif: $('d-tarif').value,
@@ -1055,17 +1288,23 @@ function enregistrerEleve() {
   else { id = uid(); db.eleves.push({ id, ...data }); }
   sauver();
   $('dlg-eleve').close();
-  toast('Élève enregistré');
-  if (retourVersFacture) {
+  toast('Client enregistré');
+  if (retourVersActivite) {
+    afficherActivites(); $('ac-client').value = id; choisirClientActivite();
+  } else if (retourVersFacture) {
     remplirSelectEleves(); $('e-eleve').value = id; choisirEleve();
   } else afficherEleves();
 }
 function supprimerEleve(id) {
   const e = eleveParId(id);
+  if (db.activites.some(a => a.eleveId === id && !a.factureId)) {
+    alert(`${e.nom} a encore des activités à facturer. Facturez-les ou supprimez-les d'abord.`);
+    return;
+  }
   const nb = db.factures.filter(f => f.eleveId === id).length;
   if (!confirm(`Supprimer ${e.nom} ?` + (nb ? `\nSes ${nb} facture(s) seront conservées.` : ''))) return;
   db.eleves = db.eleves.filter(x => x.id !== id);
-  sauver(); afficherEleves(); toast('Élève supprimé');
+  sauver(); afficherEleves(); toast('Client supprimé');
 }
 function factureEleve(id) {
   nouvelleFacture(); $('e-eleve').value = id; choisirEleve();
@@ -1093,7 +1332,8 @@ function dessinerPrestations() {
     <tr>
       <td><input value="${esc(x.desc)}" oninput="prestationsEdition[${i}].desc=this.value"></td>
       <td><input type="number" step="0.25" style="text-align:right" value="${esc(x.qte)}" oninput="prestationsEdition[${i}].qte=this.value"></td>
-      <td><input type="number" step="0.01" style="text-align:right" placeholder="tarif élève" value="${esc(x.prix)}" oninput="prestationsEdition[${i}].prix=this.value"></td>
+      <td><select onchange="prestationsEdition[${i}].unite=this.value">${optionsUnite(x.unite)}</select></td>
+      <td><input type="number" step="0.01" style="text-align:right" placeholder="tarif du client" value="${esc(x.prix)}" oninput="prestationsEdition[${i}].prix=this.value"></td>
       <td><button class="btn small link" style="color:var(--danger)" onclick="prestationsEdition.splice(${i},1);dessinerPrestations()">✕</button></td>
     </tr>`).join('');
 }
@@ -1156,7 +1396,7 @@ function exporterSauvegarde(auto = false) {
 // Sauvegarde automatique au moment d'enregistrer une facture (le clic autorise le téléchargement dans Safari)
 function sauvegardeAutoSiBesoin() {
   const d = db.derniereSauvegarde;
-  if (!d || (Date.now() - new Date(d)) > 7 * 864e5) { exporterSauvegarde(true); return true; }
+  if (!d || (Date.now() - new Date(d)) > 30 * 864e5) { exporterSauvegarde(true); return true; }
   return false;
 }
 function importerSauvegarde(ev) {
@@ -1165,16 +1405,18 @@ function importerSauvegarde(ev) {
   fichier.text().then(txt => {
     const d = JSON.parse(txt);
     if (!Array.isArray(d.factures) || !Array.isArray(d.eleves)) throw new Error('fichier non reconnu');
-    if (!confirm(`Restaurer cette sauvegarde (${d.eleves.length} élèves, ${d.factures.length} factures) ?\nLes données actuelles seront remplacées.`)) return;
+    if (!confirm(`Restaurer cette sauvegarde (${d.eleves.length} clients, ${d.factures.length} factures) ?\nLes données actuelles seront remplacées.`)) return;
     db = { ...structuredClone(DEFAUT), ...d, parametres: { ...DEFAUT.parametres, ...d.parametres } };
-    sauver(); montrer('factures'); toast('Sauvegarde restaurée');
+    sauver();
+    if ($('dlg-accueil').open) $('dlg-accueil').close();
+    montrer('factures'); toast('Sauvegarde restaurée');
   }).catch(e => alert('Impossible de lire ce fichier : ' + e.message))
     .finally(() => { ev.target.value = ''; });
 }
 function exporterCSV() {
   const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const nb = n => String(arrondi(n)).replace('.', ',');
-  const lignes = [['Numéro', 'Date', 'Élève', 'Facturé à', 'Sous-total', 'TPS', 'TVQ', 'Total', 'Statut', 'Date de paiement']];
+  const lignes = [['Numéro', 'Date', 'Client', 'Facturé à', 'Sous-total', 'TPS', 'TVQ', 'Total', 'Statut', 'Date de paiement']];
   [...db.factures].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(f => {
     const t = calculer(f);
     lignes.push([f.no, f.date, f.client.nom, f.client.parent, nb(t.sousTotal), nb(t.tps), nb(t.tvq), nb(t.total),
@@ -1183,11 +1425,13 @@ function exporterCSV() {
   // BOM + point-virgule : s'ouvre correctement dans Excel en français
   telecharger(`factures-${aujourdhui()}.csv`, '﻿' + lignes.map(l => l.map(q).join(';')).join('\r\n'), 'text/csv');
 }
-// Une sauvegarde est due 30 jours après la dernière (ou après la première facture si aucune)
+// Rappel 45 jours après la dernière sauvegarde (ou après la première donnée si aucune),
+// pour laisser passer la sauvegarde automatique mensuelle
 function sauvegardeEnRetard() {
-  if (!db.factures.length) return false;
-  const depuis = db.derniereSauvegarde || db.factures.map(f => f.date).filter(Boolean).sort()[0];
-  return !depuis || (Date.now() - new Date(depuis)) > 30 * 864e5;
+  const donnees = [...db.factures, ...db.activites, ...db.depenses];
+  if (!donnees.length) return false;
+  const depuis = db.derniereSauvegarde || donnees.map(x => x.date).filter(Boolean).sort()[0];
+  return !depuis || (Date.now() - new Date(depuis)) > 45 * 864e5;
 }
 function majBanniere() {
   const d = db.derniereSauvegarde;
@@ -1201,8 +1445,8 @@ function verifierRappel() {
   if (dlg.open || document.querySelector('dialog[open]') || !sauvegardeEnRetard()) return;
   if (db.rappelReporte && Date.now() < new Date(db.rappelReporte)) return;
   $('rappel-derniere').textContent = db.derniereSauvegarde
-    ? 'Ta dernière sauvegarde date du ' + dateLongue(db.derniereSauvegarde.slice(0, 10)) + '.'
-    : "Tu n'as encore jamais fait de sauvegarde.";
+    ? 'Votre dernière sauvegarde date du ' + dateLongue(db.derniereSauvegarde.slice(0, 10)) + '.'
+    : "Vous n'avez encore jamais fait de sauvegarde.";
   dlg.showModal();
 }
 function reporterRappel() {
@@ -1218,13 +1462,405 @@ function sauvegarderDepuisRappel() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) verifierRappel(); });
 
 // ===================================================================
+// Activités
+// ===================================================================
+let activiteEnCours = null;
+let selectionActivites = new Set();
+
+const trouverActivite = id => db.activites.find(a => a.id === id);
+function tarifClient(id) {
+  const e = eleveParId(id);
+  return e && e.tarif !== '' && e.tarif != null ? Number(e.tarif) : Number(db.parametres.tarif) || 0;
+}
+function optionsClients() {
+  return [...db.eleves].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+    .map(e => `<option value="${e.id}">${esc(e.nom)}</option>`).join('');
+}
+function nomClientActivite(a) {
+  return eleveParId(a.eleveId)?.nom ?? db.factures.find(f => f.id === a.factureId)?.client.nom ?? '(client supprimé)';
+}
+
+function afficherActivites() {
+  const s = $('ac-client'), valeur = s.value;
+  s.innerHTML = `<option value="">— Choisir un client —</option>${optionsClients()}<option value="__nouveau">+ Nouveau client…</option>`;
+  s.value = eleveParId(valeur) ? valeur : '';
+  const f = $('ac-f-client'), filtre = f.value;
+  f.innerHTML = `<option value="">Tous les clients</option>${optionsClients()}`;
+  f.value = eleveParId(filtre) ? filtre : '';
+  $('ac-suggestions').innerHTML = db.parametres.prestations.map(p => `<option value="${esc(p.desc)}"></option>`).join('');
+  if (!$('ac-date').value) $('ac-date').value = aujourdhui();
+  if ($('ac-prix').value === '') $('ac-prix').value = tarifClient(s.value);
+
+  // À facturer, par client
+  const parClient = new Map();
+  db.activites.filter(a => !a.factureId).forEach(a => {
+    if (!parClient.has(a.eleveId)) parClient.set(a.eleveId, []);
+    parClient.get(a.eleveId).push(a);
+  });
+  $('ac-a-facturer').innerHTML = [...parClient.entries()]
+    .sort((a, b) => nomClientActivite(a[1][0]).localeCompare(nomClientActivite(b[1][0]), 'fr'))
+    .map(([id, liste]) => `
+      <div class="stat">
+        <div class="lbl">${esc(nomClientActivite(liste[0]))} · ${liste.length} à facturer</div>
+        <div class="val">${argent(liste.reduce((t, a) => t + montantLigne(a), 0))}</div>
+        <button class="btn small" style="margin-top:8px" onclick="facturerClient('${id}')">Créer la facture</button>
+      </div>`).join('');
+
+  // Liste
+  const statut = $('ac-f-statut').value;
+  const liste = db.activites
+    .filter(a => !f.value || a.eleveId === f.value)
+    .filter(a => !statut || (statut === 'afacturer' ? !a.factureId : a.factureId))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  selectionActivites = new Set([...selectionActivites].filter(id => trouverActivite(id) && !trouverActivite(id).factureId));
+
+  $('liste-activites').innerHTML = !liste.length
+    ? `<tr><td colspan="9" class="empty">${db.activites.length ? 'Aucune activité ne correspond.' : 'Aucune activité. Ajoutez vos cours, séances et autres services ci-dessus au fil du temps, puis regroupez-les dans une facture.'}</td></tr>`
+    : liste.map(a => {
+      const facture = a.factureId && db.factures.find(x => x.id === a.factureId);
+      return `<tr>
+        <td>${a.factureId ? '' : `<input type="checkbox" class="coche" ${selectionActivites.has(a.id) ? 'checked' : ''} onchange="basculerSelection('${a.id}',this.checked)">`}</td>
+        <td style="white-space:nowrap">${dateLongue(a.date)}</td>
+        <td>${esc(nomClientActivite(a))}</td>
+        <td>${esc(a.desc)}</td>
+        <td class="num">${texteQte(a)}</td>
+        <td class="num">${textePrix(a)}</td>
+        <td class="num">${argent(montantLigne(a))}</td>
+        <td>${facture
+          ? `<button class="btn small link" onclick="editerFacture('${facture.id}')">Facture ${esc(facture.no)}</button>`
+          : '<span class="badge impayee">À facturer</span>'}</td>
+        <td class="num">${a.factureId ? '' : `
+          <button class="btn small" onclick="editerActivite('${a.id}')">Modifier</button>
+          <button class="btn small danger" title="Supprimer" onclick="supprimerActivite('${a.id}')">✕</button>`}</td>
+      </tr>`;
+    }).join('');
+  majSelection();
+  majBanniere();
+}
+
+function choisirClientActivite() {
+  const s = $('ac-client');
+  if (s.value === '__nouveau') {
+    s.value = '';
+    editerEleve(null);
+    retourVersActivite = true;
+    return;
+  }
+  $('ac-prix').value = tarifClient(s.value);
+  appliquerPrestation();
+}
+// Une description connue reprend la durée, l'unité et le prix du bouton rapide
+function appliquerPrestation() {
+  const p = db.parametres.prestations.find(x => x.desc === $('ac-desc').value.trim());
+  if (!p) return;
+  $('ac-qte').value = Number(p.qte) || 1;
+  $('ac-unite').value = p.unite || 'qte';
+  $('ac-prix').value = p.prix === '' || p.prix == null ? tarifClient($('ac-client').value) : Number(p.prix);
+}
+
+function enregistrerActivite() {
+  const data = {
+    date: $('ac-date').value, eleveId: $('ac-client').value, desc: $('ac-desc').value.trim(),
+    qte: Number($('ac-qte').value) || 0, unite: $('ac-unite').value, prix: Number($('ac-prix').value) || 0,
+  };
+  if (!data.date) { alert('Indiquez la date.'); return; }
+  if (!data.eleveId) { alert('Choisissez un client.'); return; }
+  if (!data.desc) { alert('Indiquez une description.'); $('ac-desc').focus(); return; }
+  if (data.qte <= 0) { alert('Indiquez une durée ou une quantité.'); $('ac-qte').focus(); return; }
+  if (activiteEnCours) {
+    Object.assign(trouverActivite(activiteEnCours), data);
+    annulerActivite();
+    toast('Activité modifiée');
+  } else {
+    const n = Math.max(1, Math.min(52, Number($('ac-semaines').value) || 1));
+    for (let k = 0; k < n; k++) {
+      db.activites.push({ id: uid(), ...data, date: ajouterJours(data.date, 7 * k), factureId: null });
+    }
+    $('ac-desc').value = '';
+    $('ac-semaines').value = 1;
+    toast(n > 1 ? n + ' activités ajoutées' : 'Activité ajoutée');
+  }
+  sauver();
+  afficherActivites();
+  $('ac-desc').focus();
+}
+function editerActivite(id) {
+  const a = trouverActivite(id);
+  activiteEnCours = id;
+  $('ac-date').value = a.date; $('ac-client').value = a.eleveId; $('ac-desc').value = a.desc;
+  $('ac-qte').value = a.qte; $('ac-unite').value = a.unite || 'qte'; $('ac-prix').value = a.prix;
+  $('ac-titre').textContent = "Modifier l'activité";
+  $('ac-bouton').textContent = 'Enregistrer';
+  $('ac-annuler').hidden = false;
+  $('ac-repeter-bloc').hidden = true;
+  window.scrollTo(0, 0);
+}
+function annulerActivite() {
+  activiteEnCours = null;
+  $('ac-desc').value = '';
+  $('ac-titre').textContent = 'Ajouter une activité';
+  $('ac-bouton').textContent = 'Ajouter';
+  $('ac-annuler').hidden = true;
+  $('ac-repeter-bloc').hidden = false;
+}
+function supprimerActivite(id) {
+  const a = trouverActivite(id);
+  if (!confirm(`Supprimer « ${a.desc} » du ${dateLongue(a.date)} ?`)) return;
+  if (activiteEnCours === id) annulerActivite();
+  db.activites = db.activites.filter(x => x.id !== id);
+  sauver(); afficherActivites(); toast('Activité supprimée');
+}
+
+function basculerSelection(id, coche) {
+  if (coche) selectionActivites.add(id); else selectionActivites.delete(id);
+  majSelection();
+}
+function selectionnerTout(coche) {
+  document.querySelectorAll('#liste-activites .coche').forEach(c => {
+    c.checked = coche;
+    c.dispatchEvent(new Event('change'));
+  });
+}
+function majSelection() {
+  const liste = [...selectionActivites].map(trouverActivite);
+  const barre = $('ac-selection');
+  barre.hidden = !liste.length;
+  const cases = [...document.querySelectorAll('#liste-activites .coche')];
+  $('ac-tout').checked = cases.length > 0 && cases.every(c => c.checked);
+  if (!liste.length) return;
+  const unSeul = new Set(liste.map(a => a.eleveId)).size === 1;
+  barre.innerHTML = unSeul
+    ? `<span>${liste.length} sélectionnée(s) · ${argent(liste.reduce((t, a) => t + montantLigne(a), 0))}</span>
+       <button class="btn primary small" onclick="facturerActivites([...selectionActivites])">Créer la facture</button>`
+    : '<span>Une facture regroupe un seul client : sélectionnez les activités d\'un seul client.</span>';
+}
+
+const activitesAFacturer = id => db.activites.filter(a => a.eleveId === id && (!a.factureId || a.factureId === factureEnCours));
+const ligneDepuisActivite = a => ({ date: a.date, desc: a.desc, qte: a.qte, prix: a.prix, unite: a.unite, activiteId: a.id });
+
+function facturerClient(id) {
+  facturerActivites(db.activites.filter(a => a.eleveId === id && !a.factureId).map(a => a.id));
+}
+function facturerActivites(ids) {
+  const liste = ids.map(trouverActivite).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  nouvelleFacture();
+  $('e-eleve').value = liste[0].eleveId;
+  lignesEdition = liste.map(ligneDepuisActivite);
+  choisirEleve(false);
+  dessinerLignes();
+  selectionActivites.clear();
+}
+// Dans l'éditeur : propose les activités du client qui ne sont pas encore sur la facture
+function majSuggestionActivites() {
+  const id = $('e-eleve').value;
+  const lie = lignesEdition.some(l => l.activiteId);
+  $('e-eleve').disabled = lie;
+  const deja = new Set(lignesEdition.map(l => l.activiteId));
+  const liste = activitesAFacturer(id).filter(a => !deja.has(a.id));
+  $('e-activites').innerHTML = liste.length
+    ? `<button class="btn small" onclick="ajouterActivitesEdition()">+ Ajouter ${liste.length} activité(s) à facturer (${argent(liste.reduce((t, a) => t + montantLigne(a), 0))})</button>`
+    : (lie ? '<p class="hint">Le client ne peut pas changer tant que ses activités sont sur la facture.</p>' : '');
+}
+function ajouterActivitesEdition() {
+  const deja = new Set(lignesEdition.map(l => l.activiteId));
+  activitesAFacturer($('e-eleve').value).filter(a => !deja.has(a.id)).forEach(a => lignesEdition.push(ligneDepuisActivite(a)));
+  dessinerLignes();
+}
+// Après l'enregistrement d'une facture : les activités suivent les lignes qui y restent
+function lierActivites(f) {
+  const ids = new Set(f.lignes.map(l => l.activiteId).filter(Boolean));
+  db.activites.forEach(a => {
+    if (ids.has(a.id)) a.factureId = f.id;
+    else if (a.factureId === f.id) a.factureId = null;
+  });
+}
+
+// ===================================================================
+// Dépenses
+// ===================================================================
+const CATEGORIES = ['Assurances', 'Bureau et fournitures', 'Déplacements et véhicule', 'Formation', 'Frais bancaires',
+  'Honoraires professionnels', 'Loyer', 'Matériel et équipement', 'Publicité', 'Repas et représentation', 'Télécommunications', 'Autre'];
+let depenseEnCours = null;
+
+const coutDepense = d => (Number(d.montant) || 0) - (Number(d.tps) || 0) - (Number(d.tvq) || 0);
+function annees() {
+  const a = new Set([annee]);
+  [...db.factures, ...db.depenses].forEach(x => { if (x.date) a.add(Number(x.date.slice(0, 4))); });
+  return [...a].sort((x, y) => y - x);
+}
+function remplirAnnees(s) {
+  const v = s.value || String(annee);
+  s.innerHTML = annees().map(a => `<option>${a}</option>`).join('');
+  s.value = v;
+}
+
+function afficherDepenses() {
+  remplirAnnees($('dp-f-annee'));
+  $('dp-categories').innerHTML = [...new Set([...CATEGORIES, ...db.depenses.map(d => d.categorie).filter(Boolean)])]
+    .map(c => `<option value="${esc(c)}"></option>`).join('');
+  if (!$('dp-date').value) $('dp-date').value = aujourdhui();
+  $('dp-taxes').hidden = !db.parametres.taxes && !depenseEnCours;
+  const liste = db.depenses.filter(d => (d.date || '').startsWith($('dp-f-annee').value))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const tb = $('liste-depenses');
+  if (!liste.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="empty">Aucune dépense pour cette année.</td></tr>';
+    return;
+  }
+  tb.innerHTML = liste.map(d => `<tr>
+      <td style="white-space:nowrap">${dateLongue(d.date)}</td>
+      <td>${esc(d.desc)}</td>
+      <td>${esc(d.categorie)}</td>
+      <td class="num">${(Number(d.tps) || 0) + (Number(d.tvq) || 0) ? argent((Number(d.tps) || 0) + (Number(d.tvq) || 0)) : ''}</td>
+      <td class="num">${argent(d.montant)}</td>
+      <td class="num">
+        <button class="btn small" onclick="editerDepense('${d.id}')">Modifier</button>
+        <button class="btn small danger" title="Supprimer" onclick="supprimerDepense('${d.id}')">✕</button>
+      </td>
+    </tr>`).join('') + `<tr><td colspan="4"><b>Total ${esc($('dp-f-annee').value)}</b></td><td class="num"><b>${argent(liste.reduce((t, d) => t + (Number(d.montant) || 0), 0))}</b></td><td></td></tr>`;
+}
+function calculerTaxesDepense() {
+  const p = db.parametres, m = Number($('dp-montant').value) || 0;
+  const base = m / (1 + (p.tpsTaux + p.tvqTaux) / 100);
+  $('dp-tps').value = arrondi(base * p.tpsTaux / 100);
+  $('dp-tvq').value = arrondi(base * p.tvqTaux / 100);
+}
+function enregistrerDepense() {
+  const data = {
+    date: $('dp-date').value, desc: $('dp-desc').value.trim(), categorie: $('dp-cat').value.trim() || 'Autre',
+    montant: arrondi($('dp-montant').value), tps: arrondi($('dp-tps').value), tvq: arrondi($('dp-tvq').value),
+  };
+  if (!data.date) { alert('Indiquez la date.'); return; }
+  if (!data.desc) { alert('Indiquez une description.'); $('dp-desc').focus(); return; }
+  if (data.montant <= 0) { alert('Indiquez le montant payé.'); $('dp-montant').focus(); return; }
+  if (data.tps + data.tvq > data.montant) { alert('Les taxes dépassent le montant payé.'); return; }
+  if (depenseEnCours) Object.assign(db.depenses.find(d => d.id === depenseEnCours), data);
+  else db.depenses.push({ id: uid(), ...data });
+  toast(depenseEnCours ? 'Dépense modifiée' : 'Dépense ajoutée');
+  sauver();
+  annulerDepense();
+  $('dp-f-annee').value = data.date.slice(0, 4);
+  afficherDepenses();
+  if ($('dp-f-annee').value !== data.date.slice(0, 4)) { $('dp-f-annee').value = data.date.slice(0, 4); afficherDepenses(); }
+}
+function editerDepense(id) {
+  const d = db.depenses.find(x => x.id === id);
+  depenseEnCours = id;
+  $('dp-date').value = d.date; $('dp-desc').value = d.desc; $('dp-cat').value = d.categorie;
+  $('dp-montant').value = d.montant; $('dp-tps').value = d.tps || ''; $('dp-tvq').value = d.tvq || '';
+  $('dp-titre').textContent = 'Modifier la dépense';
+  $('dp-bouton').textContent = 'Enregistrer';
+  $('dp-annuler').hidden = false;
+  $('dp-taxes').hidden = false;
+  window.scrollTo(0, 0);
+}
+function annulerDepense() {
+  depenseEnCours = null;
+  ['dp-desc', 'dp-cat', 'dp-montant', 'dp-tps', 'dp-tvq'].forEach(i => { $(i).value = ''; });
+  $('dp-titre').textContent = 'Ajouter une dépense';
+  $('dp-bouton').textContent = 'Ajouter';
+  $('dp-annuler').hidden = true;
+  $('dp-taxes').hidden = !db.parametres.taxes;
+}
+function supprimerDepense(id) {
+  const d = db.depenses.find(x => x.id === id);
+  if (!confirm(`Supprimer la dépense « ${d.desc} » ?`)) return;
+  if (depenseEnCours === id) annulerDepense();
+  db.depenses = db.depenses.filter(x => x.id !== id);
+  sauver(); afficherDepenses(); toast('Dépense supprimée');
+}
+function exporterDepensesCSV() {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const nb = n => String(arrondi(n)).replace('.', ',');
+  const lignes = [['Date', 'Description', 'Catégorie', 'Montant payé', 'TPS', 'TVQ']];
+  [...db.depenses].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(d => {
+    lignes.push([d.date, d.desc, d.categorie, nb(d.montant), nb(d.tps), nb(d.tvq)]);
+  });
+  telecharger(`depenses-${aujourdhui()}.csv`, '﻿' + lignes.map(l => l.map(q).join(';')).join('\r\n'), 'text/csv');
+}
+
+// ===================================================================
+// Finances
+// ===================================================================
+function afficherFinances() {
+  remplirAnnees($('fin-annee'));
+  const an = $('fin-annee').value;
+  const factures = db.factures.filter(f => (f.date || '').startsWith(an));
+  const depenses = db.depenses.filter(d => (d.date || '').startsWith(an));
+  const revenus = factures.reduce((t, f) => t + calculer(f).sousTotal, 0);
+  const frais = depenses.reduce((t, d) => t + coutDepense(d), 0);
+  const aRecevoir = db.factures.filter(f => f.statut !== 'payee').reduce((t, f) => t + calculer(f).total, 0);
+  const aFacturer = db.activites.filter(a => !a.factureId).reduce((t, a) => t + montantLigne(a), 0);
+  const stat = (lbl, val, couleur = '') => `<div class="stat"><div class="lbl">${lbl}</div><div class="val" style="${couleur}">${argent(val)}</div></div>`;
+  $('fin-stats').innerHTML =
+    stat('Revenus ' + an, revenus) + stat('Dépenses ' + an, frais) +
+    stat('Bénéfice estimé ' + an, revenus - frais, revenus - frais < 0 ? 'color:var(--danger)' : 'color:var(--ok)') +
+    stat('À recevoir (toutes les années)', aRecevoir) + stat('Activités à facturer', aFacturer);
+
+  $('fin-mois').innerHTML = Array.from({ length: 12 }, (_, i) => {
+    const m = an + '-' + String(i + 1).padStart(2, '0');
+    const r = factures.filter(f => f.date.startsWith(m)).reduce((t, f) => t + calculer(f).sousTotal, 0);
+    const d = depenses.filter(x => x.date.startsWith(m)).reduce((t, x) => t + coutDepense(x), 0);
+    const nom = new Date(m + '-15T12:00:00').toLocaleDateString('fr-CA', { month: 'long' });
+    return `<tr><td>${nom}</td><td class="num">${argent(r)}</td><td class="num">${argent(d)}</td><td class="num">${argent(r - d)}</td></tr>`;
+  }).join('') + `<tr><td><b>Total</b></td><td class="num"><b>${argent(revenus)}</b></td><td class="num"><b>${argent(frais)}</b></td><td class="num"><b>${argent(revenus - frais)}</b></td></tr>`;
+
+  const parCat = new Map();
+  depenses.forEach(d => parCat.set(d.categorie, (parCat.get(d.categorie) || 0) + coutDepense(d)));
+  $('fin-categories').innerHTML = parCat.size
+    ? [...parCat.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => `<tr><td>${esc(c)}</td><td class="num">${argent(v)}</td></tr>`).join('')
+    : '<tr><td class="empty">Aucune dépense pour cette année.</td></tr>';
+
+  const tps = factures.reduce((t, f) => t + calculer(f).tps, 0), tvq = factures.reduce((t, f) => t + calculer(f).tvq, 0);
+  const tpsPayee = depenses.reduce((t, d) => t + (Number(d.tps) || 0), 0), tvqPayee = depenses.reduce((t, d) => t + (Number(d.tvq) || 0), 0);
+  $('fin-taxes-carte').hidden = !(db.parametres.taxes || tps || tvq || tpsPayee || tvqPayee);
+  $('fin-taxes').innerHTML = `
+    <tr><th></th><th class="num">TPS</th><th class="num">TVQ</th></tr>
+    <tr><td>Perçues sur les factures</td><td class="num">${argent(tps)}</td><td class="num">${argent(tvq)}</td></tr>
+    <tr><td>Payées sur les dépenses</td><td class="num">${argent(tpsPayee)}</td><td class="num">${argent(tvqPayee)}</td></tr>
+    <tr><td><b>Différence estimée</b></td><td class="num"><b>${argent(tps - tpsPayee)}</b></td><td class="num"><b>${argent(tvq - tvqPayee)}</b></td></tr>`;
+}
+
+// ===================================================================
+// Guide de démarrage
+// ===================================================================
+let clientAccueil = null;
+
+function accueilEtape(n) {
+  [1, 2, 3].forEach(i => { $('accueil-' + i).hidden = i !== n; });
+}
+function accueilInfos() {
+  const nom = $('a-nom').value.trim();
+  if (!nom) { alert('Indiquez votre nom ou celui de votre entreprise.'); $('a-nom').focus(); return; }
+  Object.assign(db.parametres, { nom, courriel: $('a-courriel').value.trim(), tel: $('a-tel').value.trim() });
+  sauver();
+  accueilEtape(2);
+  $('a-client').focus();
+}
+function accueilClient() {
+  const nom = $('a-client').value.trim();
+  if (nom) {
+    clientAccueil = uid();
+    db.eleves.push({ id: clientAccueil, nom, parent: '', courriel: $('a-client-courriel').value.trim(), tel: '', adresse: '', tarif: '' });
+    sauver();
+  }
+  accueilEtape(3);
+}
+function accueilFin(ajouter) {
+  $('dlg-accueil').close();
+  montrer('activites');
+  if (ajouter && clientAccueil) { $('ac-client').value = clientAccueil; choisirClientActivite(); }
+  if (ajouter) $('ac-desc').focus();
+}
+
+// ===================================================================
 // Démarrage
 // ===================================================================
 if (!db.parametres.nom) {
-  montrer('parametres');
-  setTimeout(() => toast('Bienvenue ! Commence par entrer tes informations.'), 300);
+  montrer('activites');
+  $('dlg-accueil').showModal();
 } else {
-  montrer('factures');
+  montrer('activites');
   setTimeout(verifierRappel, 400);
 }
 </script>
